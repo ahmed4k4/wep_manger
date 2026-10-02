@@ -8,9 +8,10 @@ import { NextIntlClientProvider } from 'next-intl';
 import { notFound } from 'next/navigation';
 import { LOCALES, type Locale } from '@/shared/lib/i18n/config';
 import { getDirection } from '@/shared/lib/i18n/formatters';
-import DashboardLayout from '@/app/[locale]/(dashboard)/layout';
+import { AppShell } from '@/components/app-shell';
+import { createSupabaseServerClient } from '@/lib/db/supabase-server';
 import { ThemeProvider } from '@/components/theme-provider';
-import '@/app/globals.css';
+import '@/app/tailwind.generated.css';
 
 export const generateStaticParams = async () => LOCALES.map((locale) => ({ locale }));
 
@@ -26,6 +27,9 @@ export default async function LocaleLayout({
   unstable_setRequestLocale(locale);
   const messages = await getMessages();
   const direction = getDirection(locale);
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const account = user ? { name: user.user_metadata?.full_name || user.email || '', email: user.email || '' } : null;
 
   return (
     <html lang={locale} dir={direction} className={`${direction === 'rtl' ? 'rtl' : ''} no-transitions`} suppressHydrationWarning>
@@ -55,7 +59,7 @@ export default async function LocaleLayout({
           }}
         />
       </head>
-      <body className={`font-${locale === 'ar' ? 'ibm-plex-sans-arabic' : 'inter'} antialiased`}>
+      <body className={`${locale === 'ar' ? 'font-arabic' : 'font-sans'} antialiased`}>
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider
             attribute="class"
@@ -63,7 +67,7 @@ export default async function LocaleLayout({
             enableSystem
             disableTransitionOnChange
           >
-            <DashboardLayout>{children}</DashboardLayout>
+          <AppShell account={account}>{children}</AppShell>
           </ThemeProvider>
         </NextIntlClientProvider>
         <script

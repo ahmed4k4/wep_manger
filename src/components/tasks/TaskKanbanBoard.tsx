@@ -176,7 +176,7 @@ function KanbanColumn({
         variant="ghost"
         size="sm"
         className="mx-2 mb-2 w-full justify-start gap-1"
-        onClick={() => router.push(`/projects/${projectId}/tasks/new?status=${status}`)}
+        onClick={() => router.push(`/${locale}/projects/${projectId}/tasks/new?status=${status}`)}
       >
         <Plus className="h-3.5 w-3.5" />
         {isArabic ? 'إضافة' : 'Add'}
@@ -216,7 +216,7 @@ export function TaskKanbanBoard({ projectId, initialTasks }: TaskKanbanBoardProp
         <Button
           variant="outline"
           className="h-12 w-full justify-start gap-2 border-dashed"
-          onClick={() => router.push(`/projects/${projectId}/tasks/new`)}
+          onClick={() => router.push(`/${locale}/projects/${projectId}/tasks/new`)}
         >
           <Plus className="h-4 w-4" />
           {isArabic ? 'إضافة مهمة' : 'Add Task'}

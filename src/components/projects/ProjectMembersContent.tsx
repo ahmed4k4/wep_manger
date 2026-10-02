@@ -5,8 +5,10 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocale } from 'next-intl';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import {
   Card,
   CardContent,
@@ -43,13 +45,14 @@ import {
   Loader2,
 } from 'lucide-react';
 import type { Project, ProjectMember, ProjectRole } from '@/types/project';
-import { addProjectMemberAction, updateProjectMemberRoleAction, removeProjectMemberAction } from '@/app/actions/projects';
-import { ThemeSwitcher } from '@/components/theme-switcher';
+import { addProjectMemberByEmailAction, updateProjectMemberRoleAction, removeProjectMemberAction } from '@/app/actions/projects';
 
 interface ProjectMembersContentProps {
   project: Project;
   stats: any;
   members: (ProjectMember & { profile: any })[];
+  currentUserId: string;
+  currentUserRole: ProjectRole | null;
 }
 
 const roleLabels: Record<ProjectRole, { ar: string; en: string }> = {
@@ -72,41 +75,63 @@ const availableRoles: { value: ProjectRole; label: { ar: string; en: string } }[
   { value: 'VIEWER', label: { ar: 'مشاهد', en: 'Viewer' } },
 ];
 
-export function ProjectMembersContent({ project, stats, members: initialMembers }: ProjectMembersContentProps) {
+export function ProjectMembersContent({ project, stats, members: initialMembers, currentUserId, currentUserRole }: ProjectMembersContentProps) {
   const locale = useLocale();
   const isArabic = locale === 'ar';
+  const router = useRouter();
   const [members, setMembers] = useState(initialMembers);
   const [searchQuery, setSearchQuery] = useState('');
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [newMemberEmail, setNewMemberEmail] = useState('');
   const [newMemberRole, setNewMemberRole] = useState<string>('MEMBER');
   const [loadingMemberId, setLoadingMemberId] = useState<string | null>(null);
 
+  useEffect(() => setMembers(initialMembers), [initialMembers]);
+
   const filteredMembers = members.filter((member) =>
     member.profile?.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     member.profile?.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  const currentUserId = ''; // TODO: Get from auth context
+  const canInviteMembers = currentUserRole === 'OWNER' || currentUserRole === 'ADMIN';
+  const inviteRoles = currentUserRole === 'OWNER'
+    ? availableRoles
+    : availableRoles.filter((role) => role.value !== 'ADMIN');
 
   const handleAddMember = async () => {
-    if (!newMemberEmail.trim()) return;
+    const email = newMemberEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error(isArabic ? 'أدخل بريدًا إلكترونيًا صحيحًا.' : 'Enter a valid email address.');
+      return;
+    }
     setIsAdding(true);
-    // TODO: Find user by email first, then add
-    // For now, mock implementation
-    setTimeout(() => {
-      setIsAdding(false);
+    try {
+      const result = await addProjectMemberByEmailAction(project.id, email, newMemberRole as ProjectRole);
+      if (!result.success) {
+        toast.error(result.error || (isArabic ? 'تعذرت إضافة العضو.' : 'Could not add this member.'));
+        return;
+      }
+      toast.success(isArabic ? 'تمت إضافة العضو' : 'Member added');
       setNewMemberEmail('');
-    }, 1000);
+      setInviteOpen(false);
+      router.refresh();
+    } catch {
+      toast.error(isArabic ? 'تعذر الاتصال بالخدمة.' : 'Could not reach the service.');
+    } finally {
+      setIsAdding(false);
+    }
   };
 
   const handleRoleChange = async (memberId: string, newRole: ProjectRole) => {
     setLoadingMemberId(memberId);
-    const result = await updateProjectMemberRoleAction(project.id, memberId, newRole);
-    if (result.success) {
-      setMembers(members.map(m => m.id === memberId ? { ...m, role: newRole } : m));
-    }
-    setLoadingMemberId(null);
+    try {
+      const result = await updateProjectMemberRoleAction(project.id, memberId, newRole);
+      if (result.success) {
+        setMembers(members.map(m => m.id === memberId ? { ...m, role: newRole } : m));
+        toast.success(isArabic ? 'تم تحديث دور العضو' : 'Member role updated');
+      } else toast.error(result.error || (isArabic ? 'تعذر تحديث الدور.' : 'Could not update the role.'));
+    } catch { toast.error(isArabic ? 'تعذر الاتصال بالخدمة.' : 'Could not reach the service.'); }
+    finally { setLoadingMemberId(null); }
   };
 
   const handleRemoveMember = async (memberId: string) => {
@@ -114,11 +139,14 @@ export function ProjectMembersContent({ project, stats, members: initialMembers 
       return;
     }
     setLoadingMemberId(memberId);
-    const result = await removeProjectMemberAction(project.id, memberId);
-    if (result.success) {
-      setMembers(members.filter(m => m.id !== memberId));
-    }
-    setLoadingMemberId(null);
+    try {
+      const result = await removeProjectMemberAction(project.id, memberId);
+      if (result.success) {
+        setMembers(members.filter(m => m.id !== memberId));
+        toast.success(isArabic ? 'تمت إزالة العضو' : 'Member removed');
+      } else toast.error(result.error || (isArabic ? 'تعذرت إزالة العضو.' : 'Could not remove this member.'));
+    } catch { toast.error(isArabic ? 'تعذر الاتصال بالخدمة.' : 'Could not reach the service.'); }
+    finally { setLoadingMemberId(null); }
   };
 
   const getRoleIcon = (role: ProjectRole) => {
@@ -131,10 +159,19 @@ export function ProjectMembersContent({ project, stats, members: initialMembers 
   };
 
   const canManageMember = (member: ProjectMember & { profile: any }) => {
-    // Owner can manage everyone except themselves
-    // Admin can manage members and viewers (not owner or other admins)
-    // Users can only remove themselves
-    return true; // TODO: Implement proper permission check
+    const self = member.user_id === currentUserId;
+    if (member.role === 'OWNER') return false;
+    if (currentUserRole === 'OWNER') return !self;
+    if (currentUserRole === 'ADMIN') return member.role === 'MEMBER' || member.role === 'VIEWER' || self;
+    return self;
+  };
+
+  const changeableRoles = (member: ProjectMember & { profile: any }) => {
+    if (currentUserRole === 'OWNER') return availableRoles;
+    if (currentUserRole === 'ADMIN' && (member.role === 'MEMBER' || member.role === 'VIEWER')) {
+      return availableRoles.filter((role) => role.value !== 'ADMIN');
+    }
+    return [];
   };
 
   return (
@@ -151,16 +188,8 @@ export function ProjectMembersContent({ project, stats, members: initialMembers 
               : `Manage ${members.length} project members`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <ThemeSwitcher />
-        </div>
-        <Dialog open={isAdding} onOpenChange={setIsAdding}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              {isArabic ? 'إضافة عضو' : 'Add Member'}
-            </Button>
-          </DialogTrigger>
+        <Dialog open={inviteOpen} onOpenChange={(open) => { if (!isAdding) setInviteOpen(open); }}>
+          {canInviteMembers && <DialogTrigger asChild><Button><Plus className="me-2 h-4 w-4" />{isArabic ? 'إضافة عضو' : 'Add Member'}</Button></DialogTrigger>}
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{isArabic ? 'دعوة عضو جديد' : 'Invite New Member'}</DialogTitle>
@@ -184,7 +213,7 @@ export function ProjectMembersContent({ project, stats, members: initialMembers 
                     <SelectValue placeholder={isArabic ? 'اختر دوراً' : 'Select role'} />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableRoles.map((role) => (
+                    {inviteRoles.map((role) => (
                       <SelectItem key={role.value} value={role.value}>
                         {role.label[isArabic ? 'ar' : 'en']}
                       </SelectItem>
@@ -193,7 +222,7 @@ export function ProjectMembersContent({ project, stats, members: initialMembers 
                 </Select>
               </div>
               <div className="flex justify-end gap-2 pt-4">
-                <Button variant="outline" onClick={() => setIsAdding(false)} disabled={isAdding}>
+                <Button variant="outline" onClick={() => setInviteOpen(false)} disabled={isAdding}>
                   {isArabic ? 'إلغاء' : 'Cancel'}
                 </Button>
                 <Button onClick={handleAddMember} disabled={isAdding || !newMemberEmail.trim()}>
@@ -214,12 +243,12 @@ export function ProjectMembersContent({ project, stats, members: initialMembers 
 
       {/* Search */}
       <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <Input
           placeholder={isArabic ? 'البحث عن أعضاء...' : 'Search members...'}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
+          className="ps-10"
         />
       </div>
 
@@ -236,7 +265,7 @@ export function ProjectMembersContent({ project, stats, members: initialMembers 
               {filteredMembers.map((member) => (
                 <div
                   key={member.id}
-                  className="flex items-center justify-between p-4 hover:bg-accent/50 transition-colors"
+                  className="flex flex-wrap items-center justify-between gap-3 p-4 hover:bg-accent/50 transition-colors"
                 >
                   <div className="flex items-center gap-4">
                     <Avatar className="h-10 w-10">
@@ -248,7 +277,7 @@ export function ProjectMembersContent({ project, stats, members: initialMembers 
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-medium">{member.profile?.full_name || isArabic ? 'بدون اسم' : 'No name'}</p>
+                      <p className="font-medium">{member.profile?.full_name || (isArabic ? 'بدون اسم' : 'No name')}</p>
                       <p className="text-sm text-muted-foreground">{member.profile?.email}</p>
                     </div>
                     <Badge variant="outline" className={cn(roleColors[member.role])}>
@@ -268,19 +297,11 @@ export function ProjectMembersContent({ project, stats, members: initialMembers 
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem onClick={() => handleRoleChange(member.id, 'ADMIN')}>
-                            <Shield className="mr-2 h-4 w-4" />
-                            {availableRoles.find(r => r.value === 'ADMIN')?.label[isArabic ? 'ar' : 'en']}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleRoleChange(member.id, 'MEMBER')}>
-                            <UserCheck className="mr-2 h-4 w-4" />
-                            {availableRoles.find(r => r.value === 'MEMBER')?.label[isArabic ? 'ar' : 'en']}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleRoleChange(member.id, 'VIEWER')}>
-                            <Eye className="mr-2 h-4 w-4" />
-                            {availableRoles.find(r => r.value === 'VIEWER')?.label[isArabic ? 'ar' : 'en']}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
+                          {changeableRoles(member).map((role) => {
+                            const Icon = role.value === 'ADMIN' ? Shield : role.value === 'MEMBER' ? UserCheck : Eye;
+                            return <DropdownMenuItem key={role.value} disabled={loadingMemberId === member.id || role.value === member.role} onClick={() => handleRoleChange(member.id, role.value)}><Icon className="me-2 h-4 w-4" />{role.label[isArabic ? 'ar' : 'en']}</DropdownMenuItem>;
+                          })}
+                          {changeableRoles(member).length > 0 && <DropdownMenuSeparator />}
                           <DropdownMenuItem
                             className="text-destructive"
                             onClick={() => handleRemoveMember(member.id)}

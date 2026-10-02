@@ -22,7 +22,7 @@ export function TasksEmptyState({ projectId, hasFilters = false }: TasksEmptySta
   const searchParams = useSearchParams();
 
   const clearFilters = () => {
-    router.push(`/projects/${projectId}/tasks`);
+    router.push(`/${locale}/projects/${projectId}/tasks`);
   };
 
   if (hasFilters) {
@@ -61,7 +61,7 @@ export function TasksEmptyState({ projectId, hasFilters = false }: TasksEmptySta
           : 'Get started by creating your first task to organize work and track progress.'}
       </p>
       <Button
-        onClick={() => router.push(`/projects/${projectId}/tasks/new`)}
+        onClick={() => router.push(`/${locale}/projects/${projectId}/tasks/new`)}
         className="gap-2"
       >
         <Plus className="h-4 w-4" />

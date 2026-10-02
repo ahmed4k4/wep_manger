@@ -50,8 +50,15 @@ export async function POST(
     const body = await request.json();
     const { content, parent_id } = body;
 
-    if (!content || !content.trim()) {
-      return NextResponse.json({ error: 'Content is required' }, { status: 400 });
+    if (typeof content !== 'string' || !content.trim() || content.length > 20000) {
+      return NextResponse.json({ error: 'Content must be between 1 and 20000 characters' }, { status: 400 });
+    }
+    if (parent_id !== undefined && parent_id !== null && typeof parent_id !== 'string') {
+      return NextResponse.json({ error: 'Invalid parent comment' }, { status: 400 });
+    }
+    if (parent_id) {
+      const { data: parent } = await supabase.from('task_comments').select('id').eq('id', parent_id).eq('task_id', taskId).maybeSingle();
+      if (!parent) return NextResponse.json({ error: 'Parent comment not found in this task' }, { status: 404 });
     }
 
     const { data, error } = await createTaskComment({

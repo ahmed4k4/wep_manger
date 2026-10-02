@@ -6,6 +6,7 @@
 'use client';
 
 import { useLocale } from 'next-intl';
+import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
 import {
@@ -34,7 +35,8 @@ import {
 } from 'lucide-react';
 import type { Task, TaskStatus, TaskPriority, Profile } from '@/types/project';
 import { useRouter } from 'next/navigation';
-import { updateTaskStatusAction, updateTaskPriorityAction, deleteTaskAction, assignTaskAction } from '@/app/actions/tasks';
+import { updateTaskStatusAction, updateTaskPriorityAction, deleteTaskAction } from '@/app/actions/tasks';
+import { toast } from 'sonner';
 
 interface TaskCardProps {
   task: Task & {
@@ -102,21 +104,24 @@ export function TaskCard({
   const isDueSoon = task.due_date && new Date(task.due_date) > new Date() && new Date(task.due_date).getTime() - new Date().getTime() <= 3 * 24 * 60 * 60 * 1000 && task.status !== 'COMPLETED';
 
   const handleStatusChange = async (newStatus: TaskStatus) => {
-    await updateTaskStatusAction(task.id, newStatus);
-    router.refresh();
+    const result = await updateTaskStatusAction(task.id, newStatus);
+    if (!result.success) toast.error(result.error || (isArabic ? 'تعذر تحديث الحالة' : 'Could not update status'));
+    else router.refresh();
   };
 
   const handlePriorityChange = async (newPriority: TaskPriority) => {
-    await updateTaskPriorityAction(task.id, newPriority);
-    router.refresh();
+    const result = await updateTaskPriorityAction(task.id, newPriority);
+    if (!result.success) toast.error(result.error || (isArabic ? 'تعذر تحديث الأولوية' : 'Could not update priority'));
+    else router.refresh();
   };
 
   const handleDelete = async () => {
     if (!confirm(isArabic ? 'هل أنت متأكد من أرشفة هذه المهمة؟' : 'Are you sure you want to archive this task?')) {
       return;
     }
-    await deleteTaskAction(task.id);
-    router.refresh();
+    const result = await deleteTaskAction(task.id);
+    if (!result.success) toast.error(result.error || (isArabic ? 'تعذر أرشفة المهمة' : 'Could not archive task'));
+    else router.refresh();
   };
 
   if (variant === 'compact') {
@@ -125,7 +130,7 @@ export function TaskCard({
         <CardContent className="p-3">
           <div className="flex items-start gap-3">
             <div className="flex-1 min-w-0">
-              <h4 className="font-medium text-sm truncate">{task.title}</h4>
+              <h4 className="font-medium text-sm truncate"><Link className="hover:text-primary" href={`/${locale}/projects/${task.project_id}/tasks/${task.id}`}>{task.title}</Link></h4>
               <div className="flex items-center gap-2 mt-1">
                 <Badge variant="outline" className={cn('text-xs', statusColors[task.status])}>
                   {statusLabels[task.status][isArabic ? 'ar' : 'en']}
@@ -177,7 +182,7 @@ export function TaskCard({
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between gap-2">
             <CardTitle className="text-sm font-medium line-clamp-2 flex-1 pr-2">
-              {task.title}
+              <Link href={`/${locale}/projects/${task.project_id}/tasks/${task.id}`} className="hover:text-primary">{task.title}</Link>
             </CardTitle>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -311,7 +316,7 @@ export function TaskCard({
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
-              <h3 className="font-medium text-base truncate">{task.title}</h3>
+              <h3 className="font-medium text-base truncate"><Link href={`/${locale}/projects/${task.project_id}/tasks/${task.id}`} className="hover:text-primary">{task.title}</Link></h3>
               {task.status === 'COMPLETED' && (
                 <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
               )}
@@ -350,7 +355,7 @@ export function TaskCard({
                 {task.assignee && (
                   <span className="flex items-center gap-1" title={task.assignee.full_name || ''}>
                     <User className="h-3.5 w-3.5" />
-                    <span>{task.assignee.full_name || isArabic ? 'بدون اسم' : 'No name'}</span>
+                    <span>{task.assignee.full_name || (isArabic ? 'بدون اسم' : 'No name')}</span>
                   </span>
                 )}
                 {task.due_date && (

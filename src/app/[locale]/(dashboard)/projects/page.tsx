@@ -7,7 +7,7 @@ import { Suspense } from 'react';
 import { ProjectsList } from './ProjectsList';
 import { ProjectsLoadingSkeleton } from '@/components/projects/ProjectsLoadingSkeleton';
 import { CreateProjectButton } from './CreateProjectButton';
-import { ThemeSwitcher } from '@/components/theme-switcher';
+import { useTranslations } from 'next-intl';
 
 export const metadata = {
   title: 'Projects | Project Management',
@@ -18,19 +18,16 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 export default function ProjectsPage() {
+  const t = useTranslations('projects');
   return (
-    <div className="container mx-auto py-6 px-4">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage and track all your projects
-          </p>
+    <div className="projects-page">
+      <div className="projects-heading">
+        <div className="min-w-0">
+          <div className="page-eyebrow">{t('workspace')}</div>
+          <h1>{t('title')}</h1>
+          <p>{t('subtitle')}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <ThemeSwitcher />
-          <CreateProjectButton />
-        </div>
+        <CreateProjectButton />
       </div>
 
       <Suspense fallback={<ProjectsLoadingSkeleton />}>

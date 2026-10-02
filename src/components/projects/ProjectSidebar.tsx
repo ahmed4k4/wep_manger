@@ -103,15 +103,16 @@ export function ProjectSidebar({ project }: ProjectSidebarProps) {
       </div>
 
       {navigationItems.map((item) => {
-        const isActive = pathname === `/projects/${project.id}${item.href}` ||
-          (item.href !== '/overview' && pathname.startsWith(`/projects/${project.id}${item.href}`));
+        const path = `/${locale}/projects/${project.id}${item.href}`;
+        const isActive = pathname === path ||
+          (item.href !== '/overview' && pathname.startsWith(path));
 
         const label = labels[item.labelKey]?.[isArabic ? 'ar' : 'en'] || item.labelKey;
 
         return (
           <Link
             key={item.key}
-            href={`/projects/${project.id}${item.href}`}
+            href={path}
             className={cn(
               'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
               isActive

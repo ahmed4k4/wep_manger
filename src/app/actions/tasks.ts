@@ -6,7 +6,6 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
 import {
   createTask as createTaskQuery,
   updateTask as updateTaskQuery,
@@ -52,11 +51,8 @@ export async function createTaskAction(
     revalidatePath(`/projects/${input.project_id}/tasks`);
     revalidatePath(`/projects/${input.project_id}/overview`);
     revalidatePath('/tasks');
-    redirect(`/projects/${input.project_id}/tasks/${data!.id}`);
+    return { success: true, taskId: data!.id };
   } catch (err) {
-    if (err instanceof Error && err.message === 'NEXT_REDIRECT') {
-      throw err;
-    }
     return { success: false, error: 'Failed to create task' };
   }
 }
@@ -407,6 +403,18 @@ export async function addTaskAttachmentAction(
     const canManage = await canManageTask(taskId, userData.user.id);
     if (!canManage) {
       return { success: false, error: 'Insufficient permissions' };
+    }
+
+    const { data: file } = await supabase
+      .from('project_files')
+      .select('id')
+      .eq('id', fileId)
+      .eq('project_id', task.project_id)
+      .is('deleted_at', null)
+      .single();
+
+    if (!file) {
+      return { success: false, error: 'File must belong to the task project' };
     }
 
     const { data, error } = await addTaskAttachmentQuery(taskId, fileId);

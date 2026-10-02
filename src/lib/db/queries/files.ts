@@ -4,6 +4,7 @@
  */
 
 import { createSupabaseServerClient, createSupabaseAdminClient } from '../supabase-server';
+import { randomUUID } from 'node:crypto';
 import type {
   ProjectFile,
   UserFile,
@@ -48,11 +49,13 @@ export { ALLOWED_MIME_TYPES, MAX_FILE_SIZE, isValidMimeType, formatFileSize, get
 // ============================================================================
 
 export function getProjectFilePath(projectId: string, fileName: string): string {
-  return `projects/${projectId}/${Date.now()}-${fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+  const safeName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_').replace(/^\.+$/, 'file');
+  return `${projectId}/${randomUUID()}/${safeName}`;
 }
 
 export function getUserFilePath(userId: string, projectId: string, fileName: string): string {
-  return `users/${userId}/projects/${projectId}/${Date.now()}-${fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+  const safeName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_').replace(/^\.+$/, 'file');
+  return `${userId}/${projectId}/${randomUUID()}/${safeName}`;
 }
 
 // ============================================================================

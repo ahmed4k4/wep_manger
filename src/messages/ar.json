@@ -70,6 +70,8 @@
   },
   "projects": {
     "title": "المشاريع",
+    "workspace": "مساحة عملك",
+    "subtitle": "خطّط ونظّم وتابع تقدّم عمل فريقك.",
     "createProject": "إنشاء مشروع",
     "projectKey": "مفتاح المشروع",
     "projectName": "اسم المشروع",

@@ -19,6 +19,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 
 interface CommentSectionProps {
   taskId: string;
+  currentUserId: string;
   initialComments?: TaskComment[];
   onCommentChange?: () => void;
 }
@@ -29,7 +30,7 @@ interface CommentWithReplies extends Omit<TaskComment, 'replies'> {
   editContent?: string;
 }
 
-export function CommentSection({ taskId, initialComments = [], onCommentChange }: CommentSectionProps) {
+export function CommentSection({ taskId, currentUserId, initialComments = [], onCommentChange }: CommentSectionProps) {
   const locale = useLocale();
   const isArabic = locale === 'ar';
   const [comments, setComments] = useState<CommentWithReplies[]>(
@@ -41,6 +42,7 @@ export function CommentSection({ taskId, initialComments = [], onCommentChange }
   const [submitting, setSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Focus textarea when replying
@@ -55,12 +57,18 @@ export function CommentSection({ taskId, initialComments = [], onCommentChange }
     if (!newComment.trim() || submitting) return;
 
     setSubmitting(true);
+    setRequestError(null);
     try {
       const response = await fetch(`/api/tasks/${taskId}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: newComment.trim() }),
       });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || (isArabic ? 'تعذر إضافة التعليق' : 'Could not add comment'));
+      }
 
       if (response.ok) {
         const comment = await response.json();
@@ -69,6 +77,7 @@ export function CommentSection({ taskId, initialComments = [], onCommentChange }
         onCommentChange?.();
       }
     } catch (error) {
+      setRequestError(error instanceof Error ? error.message : (isArabic ? 'تعذر إضافة التعليق' : 'Could not add comment'));
       console.error('Failed to create comment:', error);
     } finally {
       setSubmitting(false);
@@ -80,12 +89,18 @@ export function CommentSection({ taskId, initialComments = [], onCommentChange }
     if (!replyContent.trim() || submitting) return;
 
     setSubmitting(true);
+    setRequestError(null);
     try {
       const response = await fetch(`/api/tasks/${taskId}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: replyContent.trim(), parent_id: parentId }),
       });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || (isArabic ? 'تعذر إضافة الرد' : 'Could not add reply'));
+      }
 
       if (response.ok) {
         const reply = await response.json();
@@ -102,6 +117,7 @@ export function CommentSection({ taskId, initialComments = [], onCommentChange }
         onCommentChange?.();
       }
     } catch (error) {
+      setRequestError(error instanceof Error ? error.message : (isArabic ? 'تعذر إضافة الرد' : 'Could not add reply'));
       console.error('Failed to create reply:', error);
     } finally {
       setSubmitting(false);
@@ -112,12 +128,18 @@ export function CommentSection({ taskId, initialComments = [], onCommentChange }
     if (!content.trim() || submitting) return;
 
     setSubmitting(true);
+    setRequestError(null);
     try {
       const response = await fetch(`/api/tasks/${taskId}/comments/${commentId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: content.trim() }),
       });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || (isArabic ? 'تعذر تحديث التعليق' : 'Could not update comment'));
+      }
 
       if (response.ok) {
         setComments(prev =>
@@ -138,6 +160,7 @@ export function CommentSection({ taskId, initialComments = [], onCommentChange }
         onCommentChange?.();
       }
     } catch (error) {
+      setRequestError(error instanceof Error ? error.message : (isArabic ? 'تعذر تحديث التعليق' : 'Could not update comment'));
       console.error('Failed to update comment:', error);
     } finally {
       setSubmitting(false);
@@ -148,10 +171,16 @@ export function CommentSection({ taskId, initialComments = [], onCommentChange }
     if (!confirm(isArabic ? 'هل أنت متأكد من حذف هذا التعليق؟' : 'Are you sure you want to delete this comment?')) return;
 
     setDeletingId(commentId);
+    setRequestError(null);
     try {
       const response = await fetch(`/api/tasks/${taskId}/comments/${commentId}`, {
         method: 'DELETE',
       });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || (isArabic ? 'تعذر حذف التعليق' : 'Could not delete comment'));
+      }
 
       if (response.ok) {
         setComments(prev =>
@@ -165,6 +194,7 @@ export function CommentSection({ taskId, initialComments = [], onCommentChange }
         onCommentChange?.();
       }
     } catch (error) {
+      setRequestError(error instanceof Error ? error.message : (isArabic ? 'تعذر حذف التعليق' : 'Could not delete comment'));
       console.error('Failed to delete comment:', error);
     } finally {
       setDeletingId(null);
@@ -215,7 +245,7 @@ export function CommentSection({ taskId, initialComments = [], onCommentChange }
   };
 
   const renderComment = (comment: CommentWithReplies, level = 0) => {
-    const isAuthor = false; // TODO: Check if current user is author
+    const isAuthor = comment.user_id === currentUserId;
     const isEditing = editingId === comment.id;
     const content = isEditing ? comment.editContent : comment.content;
 
@@ -395,6 +425,7 @@ export function CommentSection({ taskId, initialComments = [], onCommentChange }
           </div>
         </div>
       </form>
+      {requestError && <p role="alert" className="ms-11 text-sm text-destructive">{requestError}</p>}
 
       {/* Comments List */}
       <div className="space-y-6 border-t pt-6">

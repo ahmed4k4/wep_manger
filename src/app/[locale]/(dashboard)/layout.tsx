@@ -1,22 +1,17 @@
-/**
- * Dashboard Layout
- * Root layout for all dashboard pages
- */
+import { redirect } from 'next/navigation';
+import { createSupabaseServerClient } from '@/lib/db/supabase-server';
 
-import { SidebarProvider } from '@/components/ui/sidebar';
-import { Toaster } from 'sonner';
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
+  params,
 }: {
   children: React.ReactNode;
+  params: Promise<{ locale: string }>;
 }) {
-  return (
-    <SidebarProvider>
-      <div className="flex h-screen bg-background">
-        {children}
-      </div>
-      <Toaster position="top-right" />
-    </SidebarProvider>
-  );
+  const { locale } = await params;
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect(`/${locale}/login?next=/${locale}/projects`);
+  return <>{children}</>;
 }

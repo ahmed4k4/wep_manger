@@ -3,7 +3,7 @@
  * Server-side queries for activity logging
  */
 
-import { createSupabaseServerClient } from '../supabase-server';
+import { createSupabaseAdminClient, createSupabaseServerClient } from '../supabase-server';
 import type { ActivityLog, ActivityLogFilters, PostgrestError } from '@/types/project';
 
 // ============================================================================
@@ -41,7 +41,9 @@ export async function logActivity(input: {
   ip_address?: string | null;
   user_agent?: string | null;
 }): Promise<{ data: ActivityLog | null; error: PostgrestError | null }> {
-  const supabase = await createSupabaseServerClient();
+  // Activity insertion is restricted to trusted server roles by RLS. Callers
+  // must authenticate and authorize the user before invoking this logger.
+  const supabase = createSupabaseAdminClient();
 
   const { data, error } = await supabase
     .from('activity_logs')

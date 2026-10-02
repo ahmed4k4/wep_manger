@@ -30,6 +30,7 @@ import {
 import { isValidMimeType, MAX_FILE_SIZE } from '@/lib/utils';
 import type { ProjectFile, UserFile, PostgrestError, ActivityAction, EntityType } from '@/types/project';
 import { logActivity } from '@/lib/db/queries/activity';
+import { createNotificationsForUsers } from '@/lib/db/queries/notifications';
 
 // ============================================================================
 // Type Definitions
@@ -76,6 +77,32 @@ async function getCurrentUser() {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   return user;
+}
+
+async function recordProjectFileUploaded(file: ProjectFile, userId: string) {
+  try {
+    const admin = await createSupabaseAdminClient();
+    const [{ data: project }, { data: members }] = await Promise.all([
+      admin.from('projects').select('name, key').eq('id', file.project_id).maybeSingle(),
+      admin.from('project_members').select('user_id').eq('project_id', file.project_id).neq('user_id', userId),
+    ]);
+    const recipients = members?.map((member) => member.user_id) || [];
+    if (recipients.length) {
+      await createNotificationsForUsers({
+        user_ids: recipients,
+        project_id: file.project_id,
+        type: 'FILE_UPLOADED',
+        title: `File Uploaded: ${file.name}`,
+        message: `A project member uploaded "${file.name}" to ${project?.name || 'the project'}${project?.key ? ` (${project.key})` : ''}`,
+        action_url: `/projects/${file.project_id}/files`,
+        action_label: 'View Files',
+        metadata: { file_id: file.id, uploaded_by: userId },
+      });
+    }
+    await logActivity({ project_id: file.project_id, user_id: userId, action: 'FILE_UPLOADED', entity_type: 'file', entity_id: file.id, metadata: { name: file.name } });
+  } catch (error) {
+    console.error('Could not record uploaded file activity:', error);
+  }
 }
 
 async function checkProjectMembership(projectId: string, userId: string): Promise<{ isMember: boolean; role?: string }> {
@@ -288,6 +315,8 @@ export async function confirmFileUpload(
         await deleteFileFromStorage('project-files', file.storage_path);
         return { success: false, error: 'File not found in storage' };
       }
+
+      await recordProjectFileUploaded(file, user.id);
 
       revalidatePath(`/projects/${file.project_id}/files`);
       return { success: true, data: file };

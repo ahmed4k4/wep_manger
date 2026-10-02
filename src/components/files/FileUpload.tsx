@@ -51,7 +51,7 @@ const [files, setFiles] = useState<UploadFile[]>([]);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const validateFile = (file: File): string | null => {
+  const validateFile = useCallback((file: File): string | null => {
     if (!isValidMimeType(file.type)) {
       return isArabic ? 'نوع الملف غير مسموح به' : 'File type not allowed';
     }
@@ -59,7 +59,7 @@ const [files, setFiles] = useState<UploadFile[]>([]);
       return isArabic ? 'حجم الملف يتجاوز 50 ميجابايت' : 'File size exceeds 50MB limit';
     }
     return null;
-  };
+  }, [isArabic]);
 
   const addFiles = useCallback((newFiles: FileList | File[]) => {
     const validFiles: UploadFile[] = [];
@@ -77,7 +77,7 @@ const [files, setFiles] = useState<UploadFile[]>([]);
       });
     });
     setFiles((prev) => [...prev, ...validFiles]);
-  }, []);
+  }, [validateFile]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -224,7 +224,6 @@ const removeFile = (id: string) => {
 
       xhr.open('PUT', signedUrl);
       xhr.setRequestHeader('Content-Type', file.type);
-      xhr.setRequestHeader('x-upsert', 'true');
       xhr.send(file);
     });
   };

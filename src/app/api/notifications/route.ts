@@ -18,6 +18,17 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
+    if (searchParams.get('count_only') === 'true') {
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .is('read_at', null);
+
+      if (error) throw error;
+      return NextResponse.json({ count: count || 0 });
+    }
+
     const limit = parseInt(searchParams.get('limit') || '20');
     const offset = parseInt(searchParams.get('offset') || '0');
     const unreadOnly = searchParams.get('unread') === 'true';
@@ -30,7 +41,7 @@ export async function GET(request: NextRequest) {
       .range(offset, offset + limit - 1);
 
     if (unreadOnly) {
-      query = query.eq('read', false);
+      query = query.is('read_at', null);
     }
 
     const { data, error, count } = await query;

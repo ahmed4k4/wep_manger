@@ -22,9 +22,9 @@ export async function PATCH(request: NextRequest) {
     if (markAllAsRead) {
       const { error } = await supabase
         .from('notifications')
-        .update({ read: true })
+        .update({ read_at: new Date().toISOString() })
         .eq('user_id', user.id)
-        .eq('read', false);
+        .is('read_at', null);
 
       if (error) throw error;
       return NextResponse.json({ success: true });
@@ -36,7 +36,7 @@ export async function PATCH(request: NextRequest) {
 
     const { error } = await supabase
       .from('notifications')
-      .update({ read: true })
+      .update({ read_at: new Date().toISOString() })
       .eq('user_id', user.id)
       .in('id', notificationIds);
 

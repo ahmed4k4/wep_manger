@@ -16,6 +16,7 @@ import type {
   ProjectFile,
   PostgrestError,
 } from '@/types/project';
+import { notifyUsers } from './workflow-notifications';
 
 // ============================================================================
 // Task Filters & Types
@@ -260,26 +261,15 @@ export async function getTaskStats(
 ): Promise<{ data: TaskStats | null; error: PostgrestError | null }> {
   const supabase = await createSupabaseServerClient();
 
-  // Use materialized view if available, otherwise compute
-  const { data, error } = await supabase
-    .from('project_task_stats')
-    .select('*')
+  // Aggregate from caller-visible rows so project stats respect RLS.
+  const { data: tasks, error } = await supabase
+    .from('tasks')
+    .select('status, priority, due_date')
     .eq('project_id', projectId)
-    .single();
+    .is('deleted_at', null);
 
-  if (error && error.code !== 'PGRST116') {
-    return { data: null, error };
-  }
-
-  // If materialized view doesn't exist or no data, compute from tasks
-  if (!data) {
-    const { data: tasks } = await supabase
-      .from('tasks')
-      .select('status, priority, due_date')
-      .eq('project_id', projectId)
-      .is('deleted_at', null);
-
-    if (tasks) {
+  if (error) return { data: null, error };
+  if (tasks) {
       const now = new Date();
       const stats: TaskStats = {
         total: tasks.length,
@@ -303,28 +293,8 @@ export async function getTaskStats(
         },
       };
       return { data: stats, error: null };
-    }
   }
-
-  return {
-    data: data ? {
-      total: data.total_tasks || 0,
-      todo: data.todo_count || 0,
-      in_progress: data.in_progress_count || 0,
-      review: data.review_count || 0,
-      blocked: data.blocked_count || 0,
-      completed: data.completed_count || 0,
-      overdue: data.overdue_count || 0,
-      due_soon: data.due_soon_count || 0,
-      by_priority: {
-        low: data.low_priority_count || 0,
-        medium: data.medium_priority_count || 0,
-        high: data.high_priority_count || 0,
-        urgent: data.urgent_priority_count || 0,
-      },
-    } : null,
-    error: null,
-  };
+  return { data: null, error: null };
 }
 
 /**
@@ -416,6 +386,27 @@ export async function createTask(
     return { data: null, error: { message: 'Unauthorized', code: 'UNAUTHORIZED' } };
   }
 
+  if (input.assignee_id) {
+    const { data: actorMembership } = await supabase
+      .from('project_members')
+      .select('role')
+      .eq('project_id', input.project_id)
+      .eq('user_id', userData.user.id)
+      .maybeSingle();
+    if (!actorMembership || !['OWNER', 'ADMIN'].includes(actorMembership.role)) {
+      return { data: null, error: { message: 'Only project owners and admins can assign tasks', code: 'ASSIGNMENT_FORBIDDEN' } };
+    }
+    const { data: assignee } = await supabase
+      .from('project_members')
+      .select('user_id, role')
+      .eq('project_id', input.project_id)
+      .eq('user_id', input.assignee_id)
+      .maybeSingle();
+    if (!assignee || assignee.role === 'VIEWER') {
+      return { data: null, error: { message: 'Assignee must be an active project member', code: 'ASSIGNEE_NOT_MEMBER' } };
+    }
+  }
+
   // Get max position for the project/status
   const { data: maxPosition } = await supabase
     .from('tasks')
@@ -454,6 +445,10 @@ export async function createTask(
     status: data.status,
     priority: data.priority,
   });
+  if (data.assignee_id) {
+    const { data: project } = await supabase.from('projects').select('name, key').eq('id', data.project_id).maybeSingle();
+    await notifyUsers({ userIds: [data.assignee_id], actorId: userData.user.id, projectId: data.project_id, type: 'TASK_ASSIGNED', title: `Task Assigned: ${data.title}`, message: `You were assigned to "${data.title}" in ${project?.name || 'the project'}`, actionUrl: `/projects/${data.project_id}/tasks/${data.id}`, actionLabel: 'View Task', metadata: { task_id: data.id, assigned_by: userData.user.id } });
+  }
 
   return { data: data as Task, error: null };
 }
@@ -478,6 +473,21 @@ export async function updateTask(
     .select('*')
     .eq('id', taskId)
     .single();
+
+  if (input.assignee_id) {
+    if (!currentTask) {
+      return { data: null, error: { message: 'Task not found', code: 'TASK_NOT_FOUND' } };
+    }
+    const { data: assignee } = await supabase
+      .from('project_members')
+      .select('user_id, role')
+      .eq('project_id', currentTask.project_id)
+      .eq('user_id', input.assignee_id)
+      .maybeSingle();
+    if (!assignee || assignee.role === 'VIEWER') {
+      return { data: null, error: { message: 'Assignee must be an active project member', code: 'ASSIGNEE_NOT_MEMBER' } };
+    }
+  }
 
   const updateData: Record<string, unknown> = {
     ...input,
@@ -539,6 +549,20 @@ export async function updateTask(
       previous_assignee: currentTask?.assignee_id,
       new_assignee: input.assignee_id,
     });
+  }
+
+  if (currentTask && data.project_id) {
+    const { data: project } = await supabase.from('projects').select('name, key').eq('id', data.project_id).maybeSingle();
+    const destination = `/projects/${data.project_id}/tasks/${data.id}`;
+    if (input.assignee_id && input.assignee_id !== currentTask.assignee_id) {
+      await notifyUsers({ userIds: [input.assignee_id], actorId: userData.user.id, projectId: data.project_id, type: 'TASK_ASSIGNED', title: `Task Assigned: ${data.title}`, message: `You were assigned to "${data.title}" in ${project?.name || 'the project'}`, actionUrl: destination, actionLabel: 'View Task', metadata: { task_id: data.id, assigned_by: userData.user.id } });
+    }
+    const recipients = [data.assignee_id, data.created_by].filter((id): id is string => !!id);
+    if (input.status && input.status !== currentTask.status) {
+      await notifyUsers({ userIds: recipients, actorId: userData.user.id, projectId: data.project_id, type: 'TASK_STATUS_CHANGED', title: `Task Status Changed: ${data.title}`, message: `Status changed to ${data.status} in ${project?.name || 'the project'}`, actionUrl: destination, actionLabel: 'View Task', metadata: { task_id: data.id, old_status: currentTask.status, new_status: data.status } });
+    } else if ((input.priority && input.priority !== currentTask.priority) || (input.due_date !== undefined && input.due_date !== currentTask.due_date)) {
+      await notifyUsers({ userIds: recipients, actorId: userData.user.id, projectId: data.project_id, type: 'TASK_UPDATED', title: `Task Updated: ${data.title}`, message: `Priority or due date changed in ${project?.name || 'the project'}`, actionUrl: destination, actionLabel: 'View Task', metadata: { task_id: data.id, priority: data.priority, due_date: data.due_date } });
+    }
   }
 
   return { data: data as Task, error: null };
@@ -689,12 +713,19 @@ export async function createTaskComment(
     is_reply: !!input.parent_id,
   });
 
+  const { data: task } = await supabase.from('tasks').select('id, project_id, title, assignee_id, created_by').eq('id', input.task_id).maybeSingle();
+  if (task) {
+    const { data: project } = await supabase.from('projects').select('name').eq('id', task.project_id).maybeSingle();
+    await notifyUsers({ userIds: [task.assignee_id, task.created_by].filter((id): id is string => !!id), actorId: userData.user.id, projectId: task.project_id, type: 'TASK_COMMENT', title: `New Comment: ${task.title}`, message: `A project member commented on "${task.title}" in ${project?.name || 'the project'}`, actionUrl: `/projects/${task.project_id}/tasks/${task.id}`, actionLabel: 'View Task', metadata: { task_id: task.id, comment_id: data.id, comment_author: userData.user.id } });
+  }
+
   return { data: data as TaskComment, error: null };
 }
 
 export async function updateTaskComment(
   commentId: string,
-  input: UpdateCommentInput
+  input: UpdateCommentInput,
+  taskId?: string
 ): Promise<{ data: TaskComment | null; error: PostgrestError | null }> {
   const supabase = await createSupabaseServerClient();
   const { data: userData } = await supabase.auth.getUser();
@@ -703,26 +734,29 @@ export async function updateTaskComment(
     return { data: null, error: { message: 'Unauthorized', code: 'UNAUTHORIZED' } };
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('task_comments')
     .update({
       content: input.content,
       updated_at: new Date().toISOString(),
     })
     .eq('id', commentId)
-    .eq('user_id', userData.user.id) // Only allow editing own comments
-    .select('*, user:profiles(*)')
-    .single();
+    .eq('user_id', userData.user.id); // Only allow editing own comments
+  if (taskId) query = query.eq('task_id', taskId);
+  const { data, error } = await query.select('*, user:profiles(*)').single();
 
   if (error) {
     return { data: null, error };
   }
 
+  await logTaskActivity(data.task_id, userData.user.id, 'COMMENT_UPDATED', 'comment', commentId, {});
+
   return { data: data as TaskComment, error: null };
 }
 
 export async function deleteTaskComment(
-  commentId: string
+  commentId: string,
+  taskId?: string
 ): Promise<{ error: PostgrestError | null }> {
   const supabase = await createSupabaseServerClient();
   const { data: userData } = await supabase.auth.getUser();
@@ -732,11 +766,14 @@ export async function deleteTaskComment(
   }
 
   // Get comment for activity log
-  const { data: comment } = await supabase
+  let commentQuery = supabase
     .from('task_comments')
     .select('task_id')
     .eq('id', commentId)
-    .single();
+    .eq('user_id', userData.user.id);
+  if (taskId) commentQuery = commentQuery.eq('task_id', taskId);
+  const { data: comment } = await commentQuery.single();
+  if (!comment) return { error: { message: 'Comment not found', code: 'NOT_FOUND' } };
 
   const { error } = await supabase
     .from('task_comments')
@@ -744,7 +781,8 @@ export async function deleteTaskComment(
       deleted_at: new Date().toISOString(),
     })
     .eq('id', commentId)
-    .eq('user_id', userData.user.id); // Only allow deleting own comments
+    .eq('user_id', userData.user.id)
+    .eq('task_id', comment.task_id); // Only allow deleting own comments in this task
 
   if (error) {
     return { error };
@@ -812,7 +850,7 @@ export async function addTaskAttachment(
   }
 
   // Log activity
-  await logTaskActivity(taskId, userData.user.id, 'FILE_UPLOADED', 'attachment', data.id, {
+  await logTaskActivity(taskId, userData.user.id, 'FILE_UPLOADED', 'file', data.id, {
     file_id: fileId,
   });
 
@@ -847,7 +885,7 @@ export async function removeTaskAttachment(
 
   // Log activity
   if (attachment) {
-    await logTaskActivity(attachment.task_id, userData.user.id, 'FILE_DELETED', 'attachment', attachmentId, {
+    await logTaskActivity(attachment.task_id, userData.user.id, 'FILE_DELETED', 'file', attachmentId, {
       file_id: attachment.file_id,
     });
   }

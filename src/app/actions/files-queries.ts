@@ -78,12 +78,13 @@ export async function getProjectFilesAction(
 }
 
 export async function getUserFilesAction(
-  filters: FileFilters & { user_id: string; sort_by?: string; sort_order?: string }
+  filters: FileFilters & { sort_by?: string; sort_order?: string }
 ): Promise<FileQueryResult<FileWithUploader>> {
   try {
     const supabase = await createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: 'Unauthorized' };
     const {
-      user_id,
       project_id,
       mime_type,
       page = 1,
@@ -101,7 +102,7 @@ export async function getUserFilesAction(
       `,
         { count: 'exact' }
       )
-      .eq('user_id', user_id)
+      .eq('user_id', user.id)
       .is('deleted_at', null);
 
     if (project_id) {

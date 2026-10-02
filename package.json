@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "predev": "tailwindcss -i ./src/app/globals.css -o ./src/app/tailwind.generated.css",
     "dev": "next dev",
+    "prebuild": "tailwindcss -i ./src/app/globals.css -o ./src/app/tailwind.generated.css",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

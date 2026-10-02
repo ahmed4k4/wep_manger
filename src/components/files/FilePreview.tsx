@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocale } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { X, Download, RotateCw, Minus, Plus } from 'lucide-react';
@@ -30,11 +30,7 @@ export function FilePreview({ fileId, type, mimeType, fileName, onClose }: FileP
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
 
-  useEffect(() => {
-    loadPreview();
-  }, [fileId, type]);
-
-  const loadPreview = async () => {
+  const loadPreview = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
@@ -53,7 +49,11 @@ export function FilePreview({ fileId, type, mimeType, fileName, onClose }: FileP
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [fileId, type, isArabic]);
+
+  useEffect(() => {
+    void loadPreview();
+  }, [loadPreview]);
 
   const handleDownload = async () => {
     try {

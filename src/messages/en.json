@@ -70,6 +70,8 @@
   },
   "projects": {
     "title": "Projects",
+    "workspace": "YOUR WORKSPACE",
+    "subtitle": "Plan, organize, and keep your team’s work moving.",
     "createProject": "Create Project",
     "projectKey": "Project Key",
     "projectName": "Project Name",

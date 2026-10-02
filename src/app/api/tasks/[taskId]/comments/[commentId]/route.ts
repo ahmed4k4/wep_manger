@@ -13,7 +13,7 @@ export async function PATCH(
   { params }: { params: Promise<{ taskId: string; commentId: string }> }
 ) {
   try {
-    const { commentId } = await params;
+    const { taskId, commentId } = await params;
     const supabase = await createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -24,11 +24,11 @@ export async function PATCH(
     const body = await request.json();
     const { content } = body;
 
-    if (!content || !content.trim()) {
-      return NextResponse.json({ error: 'Content is required' }, { status: 400 });
+    if (typeof content !== 'string' || !content.trim() || content.length > 20000) {
+      return NextResponse.json({ error: 'Content must be between 1 and 20000 characters' }, { status: 400 });
     }
 
-    const { data, error } = await updateTaskComment(commentId, content.trim());
+    const { data, error } = await updateTaskComment(commentId, { content: content.trim() }, taskId);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -46,7 +46,7 @@ export async function DELETE(
   { params }: { params: Promise<{ taskId: string; commentId: string }> }
 ) {
   try {
-    const { commentId } = await params;
+    const { taskId, commentId } = await params;
     const supabase = await createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -54,7 +54,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { error } = await deleteTaskComment(commentId);
+    const { error } = await deleteTaskComment(commentId, taskId);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

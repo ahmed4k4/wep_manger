@@ -116,7 +116,7 @@ export function NotificationBell({ initialUnreadCount = 0, initialNotifications 
         >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-xs text-destructive-foreground">
+            <span className="absolute -top-1 -end-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-xs text-destructive-foreground">
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
@@ -174,7 +174,7 @@ export function NotificationBell({ initialUnreadCount = 0, initialNotifications 
 
         <DropdownMenuItem
           onClick={() => {
-            window.location.href = '/notifications';
+            window.location.href = `/${locale}/notifications`;
             setIsOpen(false);
           }}
           className="text-center text-sm font-medium"

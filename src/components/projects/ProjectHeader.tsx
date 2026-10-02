@@ -5,7 +5,7 @@
 
 'use client';
 
-import { MoreHorizontal, Edit, Archive, Users, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { MoreHorizontal, Archive, Users, CheckCircle, Clock } from 'lucide-react';
 import { useLocale } from 'next-intl';
 import { formatDistanceToNow } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
@@ -19,7 +19,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ThemeSwitcher } from '@/components/theme-switcher';
+import { useTransition } from 'react';
+import { toast } from 'sonner';
+import { deleteProjectAction } from '@/app/actions/projects';
 import type { Project, ProjectStats } from '@/types/project';
 
 interface ProjectHeaderProps {
@@ -31,6 +33,8 @@ export function ProjectHeader({ project, stats }: ProjectHeaderProps) {
   const locale = useLocale();
   const isArabic = locale === 'ar';
   const dateLocale = isArabic ? ar : enUS;
+  const [pending, startTransition] = useTransition();
+  const projectPath = `/${locale}/projects/${project.id}`;
 
   const statusColors: Record<string, string> = {
     ACTIVE: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
@@ -89,7 +93,6 @@ export function ProjectHeader({ project, stats }: ProjectHeaderProps) {
           </div>
 
           <div className="flex items-center gap-2">
-            <ThemeSwitcher />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-9 w-9" aria-label={isArabic ? 'خيارات' : 'Options'}>
@@ -98,19 +101,22 @@ export function ProjectHeader({ project, stats }: ProjectHeaderProps) {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuItem asChild>
-                  <a href={`/projects/${project.id}/settings`}>
+                  <a href={`${projectPath}/settings`}>
                     {isArabic ? 'الإعدادات' : 'Settings'}
                   </a>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <a href={`/projects/${project.id}/members`}>
+                  <a href={`${projectPath}/members`}>
                     {isArabic ? 'إدارة الأعضاء' : 'Manage Members'}
                   </a>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive" onClick={() => {
+                <DropdownMenuItem disabled={pending} className="text-destructive" onClick={() => {
                   if (confirm(isArabic ? 'هل أنت متأكد من أرشفة هذا المشروع؟' : 'Are you sure you want to archive this project?')) {
-                    // TODO: Call archive action
+                    startTransition(async () => {
+                      const result = await deleteProjectAction(project.id);
+                      if (!result.success) toast.error(result.error || (isArabic ? 'تعذرت أرشفة المشروع' : 'Could not archive project'));
+                    });
                   }
                 }}>
                   <Archive className="mr-2 h-4 w-4" />

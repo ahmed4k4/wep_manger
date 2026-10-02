@@ -342,6 +342,7 @@ AS $$
         SELECT 1
         FROM public.profiles
         WHERE id = p_user_id
+          AND (p_user_id = auth.uid() OR auth.role() = 'service_role')
           AND role = 'ADMIN'
     );
 $$;
@@ -357,11 +358,13 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-    SELECT EXISTS (
+    SELECT auth.role() = 'service_role' OR (
+      p_user_id = auth.uid() AND EXISTS (
         SELECT 1
         FROM public.project_members
         WHERE project_id = p_project_id
           AND user_id = p_user_id
+      )
     );
 $$;
 
@@ -375,11 +378,16 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-    SELECT role
-    FROM public.project_members
-    WHERE project_id = p_project_id
-      AND user_id = p_user_id
-    LIMIT 1;
+    SELECT CASE
+      WHEN auth.role() = 'service_role' OR p_user_id = auth.uid() THEN (
+        SELECT role
+        FROM public.project_members
+        WHERE project_id = p_project_id
+          AND user_id = p_user_id
+        LIMIT 1
+      )
+      ELSE NULL
+    END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.has_project_permission(
@@ -393,12 +401,14 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-    SELECT EXISTS (
+    SELECT auth.role() = 'service_role' OR (
+      p_user_id = auth.uid() AND EXISTS (
         SELECT 1
         FROM public.project_members
         WHERE project_id = p_project_id
           AND user_id = p_user_id
           AND role = ANY(p_required_roles)
+      )
     );
 $$;
 
@@ -411,9 +421,30 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-    SELECT COUNT(*)::integer
-    FROM public.project_members
-    WHERE project_id = p_project_id;
+    SELECT CASE
+      WHEN auth.role() = 'service_role' OR public.is_admin(auth.uid())
+        OR public.is_project_member(p_project_id, auth.uid())
+      THEN (SELECT COUNT(*)::integer
+            FROM public.project_members
+            WHERE project_id = p_project_id)
+      ELSE 0
+    END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.prevent_profile_role_escalation()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    IF NEW.role IS DISTINCT FROM OLD.role
+       AND auth.role() <> 'service_role'
+       AND NOT public.is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'Only a global admin may change a profile role';
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 -- Enforce one OWNER per project.
@@ -687,6 +718,12 @@ CREATE TRIGGER trigger_profiles_updated_at
     BEFORE UPDATE ON public.profiles
     FOR EACH ROW
     EXECUTE FUNCTION public.update_updated_at_column();
+
+DROP TRIGGER IF EXISTS trigger_prevent_profile_role_escalation ON public.profiles;
+CREATE TRIGGER trigger_prevent_profile_role_escalation
+    BEFORE UPDATE OF role ON public.profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION public.prevent_profile_role_escalation();
 
 DROP TRIGGER IF EXISTS trigger_projects_updated_at ON public.projects;
 CREATE TRIGGER trigger_projects_updated_at
@@ -1050,8 +1087,22 @@ WITH CHECK (
 CREATE POLICY "Author can update own comments"
 ON public.task_comments
 FOR UPDATE
-USING (user_id = auth.uid())
-WITH CHECK (user_id = auth.uid());
+USING (
+    user_id = auth.uid()
+    AND EXISTS (
+        SELECT 1 FROM public.tasks t
+        WHERE t.id = task_comments.task_id
+          AND public.is_project_member(t.project_id, auth.uid())
+    )
+)
+WITH CHECK (
+    user_id = auth.uid()
+    AND EXISTS (
+        SELECT 1 FROM public.tasks t
+        WHERE t.id = task_comments.task_id
+          AND public.is_project_member(t.project_id, auth.uid())
+    )
+);
 
 CREATE POLICY "Author/Admin can delete comments"
 ON public.task_comments
@@ -1099,6 +1150,13 @@ WITH CHECK (
               t.project_id,
               auth.uid(),
               ARRAY['OWNER', 'ADMIN', 'MEMBER']::project_role[]
+          )
+          AND EXISTS (
+              SELECT 1
+              FROM public.project_files pf
+              WHERE pf.id = task_attachments.file_id
+                AND pf.project_id = t.project_id
+                AND pf.deleted_at IS NULL
           )
     )
 );
@@ -1350,49 +1408,49 @@ WITH CHECK (
 -- ============================================================================
 
 DROP VIEW IF EXISTS public.active_projects CASCADE;
-CREATE VIEW public.active_projects AS
+CREATE VIEW public.active_projects WITH (security_invoker = true) AS
 SELECT *
 FROM public.projects
 WHERE deleted_at IS NULL;
 
 DROP VIEW IF EXISTS public.active_tasks CASCADE;
-CREATE VIEW public.active_tasks AS
+CREATE VIEW public.active_tasks WITH (security_invoker = true) AS
 SELECT *
 FROM public.tasks
 WHERE deleted_at IS NULL;
 
 DROP VIEW IF EXISTS public.active_task_comments CASCADE;
-CREATE VIEW public.active_task_comments AS
+CREATE VIEW public.active_task_comments WITH (security_invoker = true) AS
 SELECT *
 FROM public.task_comments
 WHERE deleted_at IS NULL;
 
 DROP VIEW IF EXISTS public.active_project_files CASCADE;
-CREATE VIEW public.active_project_files AS
+CREATE VIEW public.active_project_files WITH (security_invoker = true) AS
 SELECT *
 FROM public.project_files
 WHERE deleted_at IS NULL;
 
 DROP VIEW IF EXISTS public.active_user_files CASCADE;
-CREATE VIEW public.active_user_files AS
+CREATE VIEW public.active_user_files WITH (security_invoker = true) AS
 SELECT *
 FROM public.user_files
 WHERE deleted_at IS NULL;
 
 DROP VIEW IF EXISTS public.active_project_notes CASCADE;
-CREATE VIEW public.active_project_notes AS
+CREATE VIEW public.active_project_notes WITH (security_invoker = true) AS
 SELECT *
 FROM public.project_notes
 WHERE deleted_at IS NULL;
 
 DROP VIEW IF EXISTS public.active_user_notes CASCADE;
-CREATE VIEW public.active_user_notes AS
+CREATE VIEW public.active_user_notes WITH (security_invoker = true) AS
 SELECT *
 FROM public.user_notes
 WHERE deleted_at IS NULL;
 
 DROP VIEW IF EXISTS public.unread_notifications CASCADE;
-CREATE VIEW public.unread_notifications AS
+CREATE VIEW public.unread_notifications WITH (security_invoker = true) AS
 SELECT *
 FROM public.notifications
 WHERE read_at IS NULL;
@@ -1508,6 +1566,7 @@ GRANT SELECT ON public.active_user_files TO authenticated;
 GRANT SELECT ON public.active_project_notes TO authenticated;
 GRANT SELECT ON public.active_user_notes TO authenticated;
 GRANT SELECT ON public.unread_notifications TO authenticated;
+REVOKE ALL ON public.project_task_stats, public.user_workload FROM PUBLIC, anon, authenticated;
 
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO authenticated;
 
@@ -1517,7 +1576,8 @@ GRANT EXECUTE ON FUNCTION public.get_user_project_role(uuid, uuid) TO authentica
 GRANT EXECUTE ON FUNCTION public.is_project_member(uuid, uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.has_project_permission(uuid, uuid, project_role[]) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_project_member_count(uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.refresh_materialized_views() TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.refresh_materialized_views() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.refresh_materialized_views() TO service_role;
 
 -- ============================================================================
 -- 14. STORAGE
@@ -1948,7 +2008,8 @@ TO authenticated
 USING (
     bucket_id = 'user-files'
     AND (
-        split_part(name, '/', 1)::uuid = auth.uid()
+        (split_part(name, '/', 1)::uuid = auth.uid()
+          AND public.storage_is_project_member(split_part(name, '/', 2)::uuid))
         OR public.storage_is_admin()
     )
 );
@@ -1968,6 +2029,7 @@ TO authenticated
 WITH CHECK (
     bucket_id = 'user-files'
     AND split_part(name, '/', 1)::uuid = auth.uid()
+    AND public.storage_is_project_member(split_part(name, '/', 2)::uuid)
 );
 
 
@@ -1988,6 +2050,7 @@ USING (
         split_part(name, '/', 1)::uuid = auth.uid()
         OR public.storage_is_admin()
     )
+    AND public.storage_is_project_member(split_part(name, '/', 2)::uuid)
 )
 WITH CHECK (
     bucket_id = 'user-files'
@@ -1995,6 +2058,7 @@ WITH CHECK (
         split_part(name, '/', 1)::uuid = auth.uid()
         OR public.storage_is_admin()
     )
+    AND public.storage_is_project_member(split_part(name, '/', 2)::uuid)
 );
 
 
@@ -2015,6 +2079,7 @@ USING (
         split_part(name, '/', 1)::uuid = auth.uid()
         OR public.storage_is_admin()
     )
+    AND public.storage_is_project_member(split_part(name, '/', 2)::uuid)
 );
 
 
@@ -2252,6 +2317,7 @@ FOR INSERT
 TO authenticated
 WITH CHECK (
     user_id = auth.uid()
+    AND public.storage_is_project_member(project_id)
 );
 
 
@@ -2263,12 +2329,12 @@ ON public.user_files
 FOR UPDATE
 TO authenticated
 USING (
-    user_id = auth.uid()
+    (user_id = auth.uid() AND public.storage_is_project_member(project_id))
     OR public.storage_is_admin()
 )
 WITH CHECK (
-    user_id = auth.uid()
-    OR public.storage_is_admin()
+    (user_id = auth.uid() OR public.storage_is_admin())
+    AND public.storage_is_project_member(project_id)
 );
 
 
@@ -2280,7 +2346,7 @@ ON public.user_files
 FOR DELETE
 TO authenticated
 USING (
-    user_id = auth.uid()
+    (user_id = auth.uid() AND public.storage_is_project_member(project_id))
     OR public.storage_is_admin()
 );
 
@@ -2320,6 +2386,13 @@ WITH CHECK (
         FROM public.tasks t
         WHERE t.id = task_attachments.task_id
           AND public.storage_is_project_member(t.project_id)
+          AND EXISTS (
+              SELECT 1
+              FROM public.project_files pf
+              WHERE pf.id = task_attachments.file_id
+                AND pf.project_id = t.project_id
+                AND pf.deleted_at IS NULL
+          )
     )
 );
 

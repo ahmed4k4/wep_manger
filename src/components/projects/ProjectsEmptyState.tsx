@@ -5,11 +5,10 @@
 
 'use client';
 
-import Link from 'next/link';
-import { Plus, FolderOpen, Sparkles } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { FolderOpen, Sparkles } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useLocale } from 'next-intl';
+import { CreateProjectButton } from '@/app/[locale]/(dashboard)/projects/CreateProjectButton';
 
 export function ProjectsEmptyState() {
   const locale = useLocale();
@@ -30,17 +29,10 @@ export function ProjectsEmptyState() {
               ? 'ابدأ بإنشاء أول مشروع لك لتنظيم مهامك وفريقك'
               : 'Get started by creating your first project to organize tasks and your team'}
           </p>
-          <Link href="/projects/new">
-            <Button size="lg" className="gap-2">
-              <Plus className="h-4 w-4" />
-              {isArabic ? 'إنشاء مشروع جديد' : 'Create New Project'}
-            </Button>
-          </Link>
+          <CreateProjectButton />
           <p className="mt-6 text-sm text-muted-foreground flex items-center justify-center gap-1">
             <Sparkles className="h-4 w-4" />
-            {isArabic
-              ? 'أو استعرض قوالب المشاريع الجاهزة'
-              : 'Or browse project templates'}
+            {isArabic ? 'أنشئ مشروعك الأول وابدأ بتنظيم عمل فريقك.' : 'Start with a simple space for your team’s work.'}
           </p>
         </CardContent>
       </Card>

@@ -25,10 +25,7 @@ export default async function FilesPage({ params }: FilesPageProps) {
     sort_order: 'desc',
   });
 
-  // For user files, we'll let the client component fetch based on session
-  // The server action will get the user_id from the session
   const userFilesResult = await getUserFilesAction({
-    user_id: '', // Will be filled by server action from auth context
     project_id: projectId,
     page: 1,
     page_size: 20,

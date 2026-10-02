@@ -74,8 +74,8 @@ const config: Config = {
         sm: 'calc(var(--radius) - 4px)',
       },
       fontFamily: {
-        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
-        arabic: ['var(--font-ibm-plex-sans-arabic)', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        arabic: ['IBM Plex Sans Arabic', 'Noto Sans Arabic', 'Tahoma', 'Arial', 'sans-serif'],
       },
       keyframes: {
         'accordion-down': {
@@ -123,7 +123,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [require('tailwindcss-animate')],
+  plugins: [],
 };
 
 export default config;

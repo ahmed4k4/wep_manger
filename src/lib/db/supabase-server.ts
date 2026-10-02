@@ -3,6 +3,8 @@
  * Used in Server Components, Server Actions, and Route Handlers
  */
 
+import 'server-only';
+
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { cache } from 'react';

@@ -5,9 +5,9 @@
  * Used by Server Components and Client Components
  */
 
-import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/db/supabase-server';
+import { createSupabaseServerClient } from '@/lib/db/supabase-server';
 import { revalidatePath } from 'next/cache';
-import type { Notification, NotificationType } from '@/types/project';
+import type { NotificationType } from '@/types/project';
 import { 
   getNotifications, 
   getUnreadNotificationCount, 
@@ -155,7 +155,7 @@ export async function deleteNotificationAction(notificationId: string) {
 /**
  * Create task assigned notification
  */
-export async function createTaskAssignedNotification(
+async function createTaskAssignedNotification(
   assigneeId: string,
   taskId: string,
   taskTitle: string,
@@ -187,7 +187,7 @@ export async function createTaskAssignedNotification(
 /**
  * Create task status changed notification
  */
-export async function createTaskStatusChangedNotification(
+async function createTaskStatusChangedNotification(
   recipientIds: string[],
   taskId: string,
   taskTitle: string,
@@ -215,7 +215,7 @@ export async function createTaskStatusChangedNotification(
 /**
  * Create task priority changed notification
  */
-export async function createTaskPriorityChangedNotification(
+async function createTaskPriorityChangedNotification(
   recipientIds: string[],
   taskId: string,
   taskTitle: string,
@@ -243,7 +243,7 @@ export async function createTaskPriorityChangedNotification(
 /**
  * Create task due date changed notification
  */
-export async function createTaskDueDateChangedNotification(
+async function createTaskDueDateChangedNotification(
   recipientIds: string[],
   taskId: string,
   taskTitle: string,
@@ -274,7 +274,7 @@ export async function createTaskDueDateChangedNotification(
 /**
  * Create user added to project notification
  */
-export async function createUserAddedToProjectNotification(
+async function createUserAddedToProjectNotification(
   userId: string,
   projectId: string,
   projectName: string,
@@ -304,7 +304,7 @@ export async function createUserAddedToProjectNotification(
 /**
  * Create user removed from project notification
  */
-export async function createUserRemovedFromProjectNotification(
+async function createUserRemovedFromProjectNotification(
   userId: string,
   projectId: string,
   projectName: string,
@@ -330,7 +330,7 @@ export async function createUserRemovedFromProjectNotification(
 /**
  * Create comment notification
  */
-export async function createCommentNotification(
+async function createCommentNotification(
   recipientIds: string[],
   taskId: string,
   taskTitle: string,
@@ -366,7 +366,7 @@ export async function createCommentNotification(
 /**
  * Create file uploaded notification
  */
-export async function createFileUploadedNotification(
+async function createFileUploadedNotification(
   recipientIds: string[],
   fileId: string,
   fileName: string,

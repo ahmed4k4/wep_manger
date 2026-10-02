@@ -16,6 +16,7 @@ import type {
   ProjectMemberWithProfile,
   PostgrestError,
 } from '@/types/project';
+import { notifyUsers } from './workflow-notifications';
 
 // ============================================================================
 // Project Queries
@@ -51,7 +52,7 @@ export async function getUserProjects(
       owner:profiles!projects_owner_id_fkey(*),
       members:project_members(
         *,
-        profile:profiles(*)
+        profile:profiles!project_members_user_id_fkey(*)
       )
     `,
       { count: 'exact' }
@@ -95,7 +96,7 @@ export async function getProjectById(
       owner:profiles!projects_owner_id_fkey(*),
       members:project_members(
         *,
-        profile:profiles(*)
+        profile:profiles!project_members_user_id_fkey(*)
       )
     `
     )
@@ -118,16 +119,19 @@ export async function getProjectStats(
 ): Promise<{ data: ProjectStats | null; error: PostgrestError | null }> {
   const supabase = await createSupabaseServerClient();
 
-  // Use the materialized view for performance
-  const { data, error } = await supabase
-    .from('project_task_stats')
-    .select('*')
+  // Aggregate from tasks under the caller's RLS context. Materialized views
+  // cannot enforce row-level security and could expose cross-project counts.
+  const { data: tasks, error } = await supabase
+    .from('tasks')
+    .select('status, priority, progress, due_date')
     .eq('project_id', projectId)
-    .single();
+    .is('deleted_at', null);
 
-  if (error && error.code !== 'PGRST116') {
-    return { data: null, error };
-  }
+  if (error) return { data: null, error };
+  const rows = tasks || [];
+  const count = (predicate: (task: (typeof rows)[number]) => boolean) =>
+    rows.filter(predicate).length;
+  const today = new Date().toISOString().slice(0, 10);
 
   // Get member count separately
   const { count: memberCount } = await supabase
@@ -137,16 +141,20 @@ export async function getProjectStats(
 
   return {
     data: {
-      total_tasks: data?.total_tasks || 0,
-      todo_count: data?.todo_count || 0,
-      in_progress_count: data?.in_progress_count || 0,
-      review_count: data?.review_count || 0,
-      blocked_count: data?.blocked_count || 0,
-      completed_count: data?.completed_count || 0,
-      urgent_count: data?.urgent_count || 0,
-      high_count: data?.high_count || 0,
-      avg_progress: data?.avg_progress || 0,
-      overdue_count: data?.overdue_count || 0,
+      total_tasks: rows.length,
+      todo_count: count((task) => task.status === 'TODO'),
+      in_progress_count: count((task) => task.status === 'IN_PROGRESS'),
+      review_count: count((task) => task.status === 'REVIEW'),
+      blocked_count: count((task) => task.status === 'BLOCKED'),
+      completed_count: count((task) => task.status === 'COMPLETED'),
+      urgent_count: count((task) => task.priority === 'URGENT'),
+      high_count: count((task) => task.priority === 'HIGH'),
+      avg_progress: rows.length
+        ? rows.reduce((sum, task) => sum + (task.progress || 0), 0) / rows.length
+        : 0,
+      overdue_count: count((task) =>
+        Boolean(task.due_date && task.due_date < today && task.status !== 'COMPLETED')
+      ),
       member_count: memberCount || 0,
     },
     error: null,
@@ -247,6 +255,8 @@ export async function updateProject(
       current: data,
     }
   );
+  const { data: members } = await supabase.from('project_members').select('user_id').eq('project_id', projectId).neq('user_id', userData.user.id);
+  await notifyUsers({ userIds: members?.map((member) => member.user_id) || [], actorId: userData.user.id, projectId, type: 'PROJECT_UPDATED', title: `Project Updated: ${data.name}`, message: `Project details for ${data.name} were updated`, actionUrl: `/projects/${projectId}/overview`, actionLabel: 'View Project', metadata: { project_id: projectId } });
 
   return { data: data as Project, error: null };
 }
@@ -288,7 +298,7 @@ export async function deleteProject(
   await logProjectActivity(
     projectId,
     userData.user.id,
-    'PROJECT_DELETED',
+    'PROJECT_ARCHIVED',
     'project',
     projectId,
     {
@@ -296,6 +306,8 @@ export async function deleteProject(
       key: project?.key,
     }
   );
+  const { data: members } = await supabase.from('project_members').select('user_id').eq('project_id', projectId).neq('user_id', userData.user.id);
+  await notifyUsers({ userIds: members?.map((member) => member.user_id) || [], actorId: userData.user.id, projectId, type: 'PROJECT_UPDATED', title: `Project Archived: ${project?.name || 'Project'}`, message: 'This project has been archived.', actionUrl: '/projects', actionLabel: 'View Projects', metadata: { project_id: projectId } });
 
   return { error: null };
 }
@@ -367,7 +379,7 @@ export async function getProjectMembers(
     .select(
       `
       *,
-      profile:profiles(*)
+      profile:profiles!project_members_user_id_fkey(*)
     `
     )
     .eq('project_id', projectId)
@@ -436,6 +448,8 @@ export async function addProjectMember(
       role,
     }
   );
+  const { data: project } = await supabase.from('projects').select('name').eq('id', projectId).maybeSingle();
+  await notifyUsers({ userIds: [userId], actorId: currentUser.user.id, projectId, type: 'MEMBER_ADDED', title: `Added to Project: ${project?.name || 'Project'}`, message: `You were added to ${project?.name || 'the project'} as ${role}`, actionUrl: `/projects/${projectId}/overview`, actionLabel: 'View Project', metadata: { added_by: currentUser.user.id, role } });
 
   return { data: data as ProjectMember, error: null };
 }
@@ -485,6 +499,8 @@ export async function updateProjectMemberRole(
       new_role: role,
     }
   );
+  const { data: project } = await supabase.from('projects').select('name').eq('id', currentMember!.project_id).maybeSingle();
+  await notifyUsers({ userIds: [currentMember!.user_id], actorId: currentUser.user.id, projectId: currentMember!.project_id, type: 'MEMBER_ROLE_CHANGED', title: `Project role updated: ${project?.name || 'Project'}`, message: `Your role in ${project?.name || 'the project'} changed to ${role}`, actionUrl: `/projects/${currentMember!.project_id}/members`, actionLabel: 'View Members', metadata: { role, member_id: memberId } });
 
   return { data: data as ProjectMember, error: null };
 }
@@ -530,6 +546,8 @@ export async function removeProjectMember(
       role: member!.role,
     }
   );
+  const { data: project } = await supabase.from('projects').select('name').eq('id', member!.project_id).maybeSingle();
+  if (member!.user_id !== currentUser.user.id) await notifyUsers({ userIds: [member!.user_id], actorId: currentUser.user.id, projectId: member!.project_id, type: 'MEMBER_ROLE_CHANGED', title: `Removed from Project: ${project?.name || 'Project'}`, message: `You were removed from ${project?.name || 'the project'}`, actionUrl: '/projects', actionLabel: 'View Projects', metadata: { removed_by: currentUser.user.id } });
 
   return { error: null };
 }

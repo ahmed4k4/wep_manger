@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocale } from 'next-intl';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -71,7 +71,7 @@ export function FilesClient({ projectId, initialProjectFiles, initialUserFiles }
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20, hasMore: true });
   const [previewFile, setPreviewFile] = useState<{ id: string; type: 'project' | 'user'; mimeType: string; name: string } | null>(null);
 
-  const fetchFiles = async () => {
+  const fetchFiles = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
@@ -97,7 +97,6 @@ export function FilesClient({ projectId, initialProjectFiles, initialUserFiles }
         }
       } else {
         const result = await getUserFilesAction({
-          user_id: '', // Will be filled by server action from auth context
           project_id: projectId,
           mime_type: filters.mime_type || undefined,
           page: pagination.page,
@@ -121,11 +120,11 @@ export function FilesClient({ projectId, initialProjectFiles, initialUserFiles }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [activeTab, filters.mime_type, filters.sort_by, filters.sort_order, pagination.page, pagination.pageSize, projectId]);
 
   useEffect(() => {
-    fetchFiles();
-  }, [activeTab, filters, pagination.page, projectId]);
+    void fetchFiles();
+  }, [fetchFiles]);
 
   // Reset pagination when filters change
   useEffect(() => {

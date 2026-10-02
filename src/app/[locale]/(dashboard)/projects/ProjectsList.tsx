@@ -8,6 +8,7 @@ import { getProjectStats } from '@/lib/db/queries/projects';
 import { ProjectCard } from '@/components/projects/ProjectCard';
 import { ProjectsEmptyState } from '@/components/projects/ProjectsEmptyState';
 import { ProjectsLoadingSkeleton } from '@/components/projects/ProjectsLoadingSkeleton';
+import { ProjectsErrorState } from '@/components/projects/ProjectsErrorState';
 import type { ProjectWithRelations } from '@/types/project';
 
 export async function ProjectsList() {
@@ -19,11 +20,7 @@ export async function ProjectsList() {
   });
 
   if (error) {
-    return (
-      <div className="text-center py-12 text-destructive">
-        <p>Failed to load projects: {error.message}</p>
-      </div>
-    );
+    return <ProjectsErrorState />;
   }
 
   if (!projects || projects.length === 0) {

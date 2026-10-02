@@ -23,18 +23,22 @@ import {
   Users,
   Plus,
   ArrowRight,
-  Kanban,
   ClipboardList,
   FileText,
   TrendingUp,
   Activity,
 } from 'lucide-react';
 import type { Project, ProjectStats } from '@/types/project';
-import { ThemeSwitcher } from '@/components/theme-switcher';
+import type { TaskWithRelations } from '@/lib/db/queries/tasks';
+import type { ActivityLogWithUser } from '@/lib/db/queries/activity';
+import { formatDistanceToNow } from 'date-fns';
+import { ar, enUS } from 'date-fns/locale';
 
 interface ProjectOverviewContentProps {
   project: Project;
   stats?: ProjectStats | null;
+  tasks: TaskWithRelations[];
+  activity: ActivityLogWithUser[];
 }
 
 const statCards = [
@@ -85,9 +89,11 @@ const labels: Record<string, { ar: string; en: string }> = {
   createNote: { ar: 'إضافة ملاحظة', en: 'Create Note' },
 };
 
-export function ProjectOverviewContent({ project, stats }: ProjectOverviewContentProps) {
+export function ProjectOverviewContent({ project, stats, tasks, activity }: ProjectOverviewContentProps) {
   const locale = useLocale();
   const isArabic = locale === 'ar';
+  const dateLocale = isArabic ? ar : enUS;
+  const projectPath = `/${locale}/projects/${project.id}`;
 
   const getStatValue = (key: string) => {
     if (!stats) return 0;
@@ -148,25 +154,27 @@ export function ProjectOverviewContent({ project, stats }: ProjectOverviewConten
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Link href={`/projects/${project.id}/tasks/new`}>
-              <Button variant="outline" className="w-full justify-start gap-2">
+            <Button variant="outline" asChild className="w-full justify-start gap-2">
+              <Link href={`${projectPath}/tasks`}>
                 <Plus className="h-4 w-4" />
                 {labels.createTask[isArabic ? 'ar' : 'en']}
-              </Button>
-            </Link>
-            <Link href={`/projects/${project.id}/members`}>
-              <Button variant="outline" className="w-full justify-start gap-2">
+              </Link>
+            </Button>
+            <Button variant="outline" asChild className="w-full justify-start gap-2">
+              <Link href={`${projectPath}/members`}>
                 <Users className="h-4 w-4" />
                 {labels.inviteMembers[isArabic ? 'ar' : 'en']}
-              </Button>
-            </Link>
-            <Button variant="outline" className="w-full justify-start gap-2" onClick={() => {}}>
+              </Link>
+            </Button>
+            <Button variant="outline" asChild className="w-full justify-start gap-2">
+              <Link href={`${projectPath}/files`}>
               <FileText className="h-4 w-4" />
               {labels.uploadFile[isArabic ? 'ar' : 'en']}
+              </Link>
             </Button>
-            <Button variant="outline" className="w-full justify-start gap-2" onClick={() => {}}>
+            <Button variant="outline" className="w-full justify-start gap-2" disabled title={isArabic ? 'ميزة الملاحظات غير متاحة بعد' : 'Notes are not available yet'}>
               <Activity className="h-4 w-4" />
-              {labels.createNote[isArabic ? 'ar' : 'en']}
+              {isArabic ? 'الملاحظات — قريبًا' : 'Notes — coming soon'}
             </Button>
           </CardContent>
         </Card>
@@ -179,7 +187,7 @@ export function ProjectOverviewContent({ project, stats }: ProjectOverviewConten
               {labels.recentTasks[isArabic ? 'ar' : 'en']}
             </CardTitle>
             <Link
-              href={`/projects/${project.id}/tasks`}
+              href={`${projectPath}/tasks`}
               className="text-sm font-medium text-primary hover:underline flex items-center gap-1"
             >
               {labels.viewAll[isArabic ? 'ar' : 'en']}
@@ -188,14 +196,12 @@ export function ProjectOverviewContent({ project, stats }: ProjectOverviewConten
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {/* Mock recent tasks - replace with real data */}
-              <div className="text-center py-8 text-muted-foreground">
-                <ClipboardList className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p>{labels.noTasks[isArabic ? 'ar' : 'en']}</p>
-                <Link href={`/projects/${project.id}/tasks/new`} className="text-primary hover:underline mt-2 inline-block">
-                  {isArabic ? 'إنشاء أول مهمة' : 'Create your first task'}
+              {tasks.length ? tasks.map((task) => (
+                <Link key={task.id} href={`${projectPath}/tasks`} className="flex items-center justify-between gap-3 rounded-lg border p-3 transition-colors hover:bg-accent/50">
+                  <span className="min-w-0 truncate text-sm font-medium">{task.title}</span>
+                  <Badge variant="secondary" className="shrink-0 text-xs">{({ TODO: isArabic ? 'قيد الانتظار' : 'To do', IN_PROGRESS: isArabic ? 'قيد التنفيذ' : 'In progress', REVIEW: isArabic ? 'مراجعة' : 'Review', BLOCKED: isArabic ? 'محظورة' : 'Blocked', COMPLETED: isArabic ? 'مكتملة' : 'Completed' })[task.status]}</Badge>
                 </Link>
-              </div>
+              )) : <div className="py-8 text-center text-muted-foreground"><ClipboardList className="mx-auto mb-3 h-10 w-10 opacity-40" /><p>{labels.noTasks[isArabic ? 'ar' : 'en']}</p><Link href={`${projectPath}/tasks/new`} className="mt-2 inline-block text-sm text-primary hover:underline">{isArabic ? 'أنشئ أول مهمة' : 'Create your first task'}</Link></div>}
             </div>
           </CardContent>
         </Card>
@@ -209,7 +215,7 @@ export function ProjectOverviewContent({ project, stats }: ProjectOverviewConten
             {labels.recentActivity[isArabic ? 'ar' : 'en']}
           </CardTitle>
           <Link
-            href={`/projects/${project.id}/activity`}
+            href={`${projectPath}/activity`}
             className="text-sm font-medium text-primary hover:underline flex items-center gap-1"
           >
             {labels.viewAll[isArabic ? 'ar' : 'en']}
@@ -217,10 +223,7 @@ export function ProjectOverviewContent({ project, stats }: ProjectOverviewConten
           </Link>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8 text-muted-foreground">
-            <Activity className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            <p>{labels.noActivity[isArabic ? 'ar' : 'en']}</p>
-          </div>
+          {activity.length ? <div className="space-y-4">{activity.map((entry) => <div key={entry.id} className="flex items-start justify-between gap-4 border-b pb-3 last:border-0 last:pb-0"><div className="min-w-0"><p className="truncate text-sm"><span className="font-semibold">{entry.user?.full_name || (isArabic ? 'عضو الفريق' : 'A team member')}</span><span className="text-muted-foreground"> {({ PROJECT_CREATED: isArabic ? 'أنشأ المشروع' : 'created the project', PROJECT_UPDATED: isArabic ? 'حدّث المشروع' : 'updated the project', TASK_CREATED: isArabic ? 'أنشأ مهمة' : 'created a task', TASK_UPDATED: isArabic ? 'حدّث مهمة' : 'updated a task', TASK_STATUS_CHANGED: isArabic ? 'غيّر حالة مهمة' : 'changed a task status', COMMENT_CREATED: isArabic ? 'أضاف تعليقًا' : 'added a comment', FILE_UPLOADED: isArabic ? 'رفع ملفًا' : 'uploaded a file' } as Record<string,string>)[entry.action] || (isArabic ? 'سجّل نشاطًا' : 'recorded activity')}</span></p></div><time className="shrink-0 text-xs text-muted-foreground" dateTime={entry.created_at}>{formatDistanceToNow(new Date(entry.created_at), { addSuffix: true, locale: dateLocale })}</time></div>)}</div> : <div className="py-8 text-center text-muted-foreground"><Activity className="mx-auto mb-3 h-10 w-10 opacity-40" /><p>{labels.noActivity[isArabic ? 'ar' : 'en']}</p></div>}
         </CardContent>
       </Card>
     </div>

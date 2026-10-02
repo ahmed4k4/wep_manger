@@ -3,7 +3,8 @@
  * Server Component - displays project members with management capabilities
  */
 
-import { getProjectById, getProjectStats, getProjectMembers } from '@/lib/db/queries/projects';
+import { getProjectById, getProjectStats, getProjectMembers, getUserProjectRole } from '@/lib/db/queries/projects';
+import { createSupabaseServerClient } from '@/lib/db/supabase-server';
 import { ProjectMembersContent } from '@/components/projects/ProjectMembersContent';
 import { notFound } from 'next/navigation';
 
@@ -17,6 +18,8 @@ export const dynamic = 'force-dynamic';
 export default async function ProjectMembersPage({ params }: ProjectMembersPageProps) {
   const { id } = await params;
 
+  const supabase = await createSupabaseServerClient();
+  const { data: authData } = await supabase.auth.getUser();
   const [{ data: project, error: projectError }, { data: stats }, { data: members }] =
     await Promise.all([
       getProjectById(id),
@@ -28,7 +31,10 @@ export default async function ProjectMembersPage({ params }: ProjectMembersPageP
     notFound();
   }
 
+  const currentUserId = authData.user?.id || '';
+  const currentUserRole = currentUserId ? await getUserProjectRole(id, currentUserId) : null;
+
   return (
-    <ProjectMembersContent project={project} stats={stats} members={members || []} />
+    <ProjectMembersContent project={project} stats={stats} members={members || []} currentUserId={currentUserId} currentUserRole={currentUserRole} />
   );
 }
