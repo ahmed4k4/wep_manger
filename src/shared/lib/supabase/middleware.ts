@@ -6,10 +6,11 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  });
+export async function updateSession(
+  request: NextRequest,
+  response: NextResponse = NextResponse.next({ request })
+) {
+  const supabaseResponse = response;
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,16 +22,10 @@ export async function updateSession(request: NextRequest) {
         },
         set(name: string, value: string, options: CookieOptions) {
           request.cookies.set({ name, value, ...options });
-          supabaseResponse = NextResponse.next({
-            request,
-          });
           supabaseResponse.cookies.set({ name, value, ...options });
         },
         remove(name: string, options: CookieOptions) {
           request.cookies.set({ name, value: '', ...options });
-          supabaseResponse = NextResponse.next({
-            request,
-          });
           supabaseResponse.cookies.set({ name, value: '', ...options });
         },
       },

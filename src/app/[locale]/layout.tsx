@@ -3,7 +3,8 @@
  * Provides locale context, RTL support, and theme provider
  */
 
-import { getMessages } from 'next-intl/server';
+import { getMessages, unstable_setRequestLocale } from 'next-intl/server';
+import { NextIntlClientProvider } from 'next-intl';
 import { notFound } from 'next/navigation';
 import { LOCALES, type Locale } from '@/shared/lib/i18n/config';
 import { getDirection } from '@/shared/lib/i18n/formatters';
@@ -22,6 +23,7 @@ export default async function LocaleLayout({
 }) {
   if (!LOCALES.includes(locale)) notFound();
 
+  unstable_setRequestLocale(locale);
   const messages = await getMessages();
   const direction = getDirection(locale);
 
@@ -54,14 +56,16 @@ export default async function LocaleLayout({
         />
       </head>
       <body className={`font-${locale === 'ar' ? 'ibm-plex-sans-arabic' : 'inter'} antialiased`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <DashboardLayout>{children}</DashboardLayout>
-        </ThemeProvider>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <DashboardLayout>{children}</DashboardLayout>
+          </ThemeProvider>
+        </NextIntlClientProvider>
         <script
           dangerouslySetInnerHTML={{
             __html: `

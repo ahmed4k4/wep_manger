@@ -6,29 +6,19 @@
 import createMiddleware from 'next-intl/middleware';
 import { updateSession } from '@/shared/lib/supabase/middleware';
 import { routing } from '@/shared/lib/i18n/routing';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 
 const intlMiddleware = createMiddleware(routing);
 
 export async function middleware(request: NextRequest) {
-  // 1. Run i18n middleware first (locale detection, redirects)
+  // Preserve next-intl redirects and rewrites. Replacing this response with
+  // NextResponse.next() loses the redirect and can send /en back to itself.
   const intlResponse = intlMiddleware(request);
-  
-  // 2. Run Supabase auth middleware
-  const authResponse = await updateSession(request);
-  
-  // Combine headers (cookies from both)
-  const response = NextResponse.next({ request });
-  
-  // Copy cookies from both responses
-  intlResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
-  authResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
-  
-  // Copy headers
-  intlResponse.headers.forEach((value, key) => response.headers.set(key, value));
-  authResponse.headers.forEach((value, key) => response.headers.set(key, value));
-  
-  return response;
+
+  // Locale redirects need no Supabase network request or session refresh.
+  if (intlResponse.status >= 300 && intlResponse.status < 400) return intlResponse;
+
+  return updateSession(request, intlResponse);
 }
 
 export const config = {
