@@ -4,7 +4,9 @@
  * These functions verify permissions against the database
  */
 
+import { cache } from 'react';
 import { createSupabaseServerClient, createSupabaseAdminClient } from './db/supabase-server';
+import { getAuthUser } from './db/auth-user';
 import type { UserRole, UserStatus, ProjectRole, Profile } from '@/types/project';
 
 // ============================================================================
@@ -22,11 +24,11 @@ export interface AuthenticatedUser {
  * Get the current authenticated user with profile info
  * Throws if not authenticated
  */
-export async function getCurrentUser(): Promise<AuthenticatedUser> {
+export const getCurrentUser = cache(async (): Promise<AuthenticatedUser> => {
   const supabase = await createSupabaseServerClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
-  if (error || !user) {
+  if (!user) {
     throw new Error('UNAUTHORIZED');
   }
 
@@ -50,7 +52,7 @@ export async function getCurrentUser(): Promise<AuthenticatedUser> {
     role: profile.global_role as UserRole,
     status: profile.status as UserStatus,
   };
-}
+});
 
 /**
  * Get current user without throwing (returns null if not authenticated)
@@ -187,7 +189,7 @@ export async function checkPermission(
 /**
  * Check if user is admin (global)
  */
-export async function checkIsAdmin(userId: string): Promise<boolean> {
+export const checkIsAdmin = cache(async (userId: string): Promise<boolean> => {
   const adminClient = createSupabaseAdminClient();
   const { data, error } = await adminClient.rpc('is_admin', {
     p_user_id: userId,
@@ -195,24 +197,23 @@ export async function checkIsAdmin(userId: string): Promise<boolean> {
 
   if (error) return false;
   return data === true;
-}
+});
 
 /**
  * Check if user is project manager (global or project-specific)
  */
-export async function checkIsProjectManager(
-  userId: string,
-  projectId?: string
-): Promise<boolean> {
-  const adminClient = createSupabaseAdminClient();
-  const { data, error } = await adminClient.rpc('is_project_manager', {
-    p_user_id: userId,
-    p_project_id: projectId,
-  });
+export const checkIsProjectManager = cache(
+  async (userId: string, projectId?: string): Promise<boolean> => {
+    const adminClient = createSupabaseAdminClient();
+    const { data, error } = await adminClient.rpc('is_project_manager', {
+      p_user_id: userId,
+      p_project_id: projectId,
+    });
 
-  if (error) return false;
-  return data === true;
-}
+    if (error) return false;
+    return data === true;
+  }
+);
 
 // ============================================================================
 // Authorization Functions (Throw on failure)

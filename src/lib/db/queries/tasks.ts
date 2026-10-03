@@ -17,6 +17,7 @@ import type {
   PostgrestError,
 } from '@/types/project';
 import { notifyUsers } from './workflow-notifications';
+import { getAuthUser } from '../auth-user';
 
 // ============================================================================
 // Task Filters & Types
@@ -109,9 +110,9 @@ export async function getTasks(
   filters: TaskFilters = {}
 ): Promise<{ data: TaskWithRelations[]; count: number; error: PostgrestError | null }> {
   const supabase = await createSupabaseServerClient();
-  const { data: userData } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
-  if (!userData.user) {
+  if (!user) {
     return { data: [], count: 0, error: { message: 'Unauthorized', code: 'UNAUTHORIZED' } };
   }
 
@@ -736,19 +737,30 @@ export async function getTaskComments(
     return { data: [], error };
   }
 
-  // Fetch replies for each comment
-  const commentsWithReplies = await Promise.all(
-    (data as TaskComment[]).map(async (comment) => {
-      const { data: replies } = await supabase
-        .from('task_comments')
-        .select('*, user:profiles(*)')
-        .eq('parent_id', comment.id)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: true });
+  // Fetch all replies in a single query instead of one query per comment (N+1).
+  const rootIds = (data as TaskComment[]).map((comment) => comment.id);
+  let repliesByParent = new Map<string, TaskComment[]>();
+  if (rootIds.length > 0) {
+    const { data: replies } = await supabase
+      .from('task_comments')
+      .select('*, user:profiles(*)')
+      .in('parent_id', rootIds)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: true });
 
-      return { ...comment, replies: replies as TaskComment[] };
-    })
-  );
+    repliesByParent = (replies as TaskComment[]).reduce((map, reply) => {
+      const parentId = (reply as TaskComment & { parent_id: string }).parent_id;
+      const bucket = map.get(parentId) ?? [];
+      bucket.push(reply);
+      map.set(parentId, bucket);
+      return map;
+    }, new Map<string, TaskComment[]>());
+  }
+
+  const commentsWithReplies = (data as TaskComment[]).map((comment) => ({
+    ...comment,
+    replies: repliesByParent.get(comment.id) ?? [],
+  }));
 
   return { data: commentsWithReplies, error: null };
 }

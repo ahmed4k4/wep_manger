@@ -164,5 +164,149 @@
     "title": "Search",
     "startSearching": "Start searching",
     "startSearchingDesc": "Type to search across projects, tasks, files, notes, and people"
+  },
+  "dashboard": {
+    "tasksByStatus": {
+      "title": "Tasks by Status",
+      "description": "Distribution of tasks across statuses"
+    },
+    "tasksByPriority": {
+      "title": "Tasks by Priority",
+      "description": "Distribution of tasks by priority level"
+    },
+    "completionTrend": {
+      "title": "Completion Trend",
+      "description": "Completed vs created tasks over time"
+    },
+    "projectProgress": {
+      "title": "Project Progress",
+      "description": "Progress of your active projects",
+      "label": "Project Progress",
+      "noProjects": "No projects found",
+      "tasks": "{completed} of {total} tasks completed"
+    },
+    "teamWorkload": {
+      "title": "Team Workload",
+      "description": "Task distribution across team members",
+      "label": "Team Workload",
+      "noMembers": "No members found",
+      "inProgress": "in progress",
+      "todo": "to do",
+      "overdue": "overdue"
+    },
+    "kpis": {
+      "totalProjects": "Total Projects",
+      "activeProjects": "Active Projects",
+      "completedProjects": "Completed Projects",
+      "totalTasks": "Total Tasks",
+      "inProgressTasks": "In Progress",
+      "completedTasks": "Completed Tasks",
+      "overdueTasks": "Overdue Tasks",
+      "teamMembers": "Team Members",
+      "totalFiles": "Total Files"
+    },
+    "myWork": {
+      "title": "My Work",
+      "todayTasks": "Today",
+      "overdueTasks": "Overdue",
+      "upcomingTasks": "Upcoming",
+      "allAssignedTasks": "All Assigned Tasks",
+      "noTodayTasks": "No tasks due today",
+      "noOverdueTasks": "No overdue tasks",
+      "noUpcomingTasks": "No upcoming tasks",
+      "noAssignedTasks": "No assigned tasks",
+      "overdue": "Overdue",
+      "showingOf": "Showing {showing} of {total}",
+      "status": {
+        "todo": "To Do",
+        "in_progress": "In Progress",
+        "review": "In Review",
+        "blocked": "Blocked",
+        "completed": "Completed"
+      },
+      "priority": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "urgent": "Urgent"
+      }
+    },
+    "overdue": {
+      "title": "Overdue Items",
+      "allCaughtUp": "All caught up!",
+      "noOverdueItems": "No overdue items",
+      "showingOf": "Showing {showing} of {total}",
+      "overdue": "{days} days overdue",
+      "wasDue": "Was due",
+      "oneDayAgo": "1 day ago",
+      "daysAgo": "{days} days ago",
+      "weeksAgo": "{weeks} weeks ago",
+      "monthsAgo": "{months} months ago"
+    },
+    "recentActivity": {
+      "label": "Recent Activity",
+      "noActivity": "No recent activity",
+      "unknownUser": "Unknown user",
+      "inProject": "in",
+      "activity": {
+        "projectCreated": "created project",
+        "projectUpdated": "updated project",
+        "projectArchived": "archived project",
+        "projectDeleted": "deleted project",
+        "taskCreated": "created task",
+        "taskUpdated": "updated task",
+        "taskStatusChanged": "changed status of task",
+        "taskAssigned": "assigned task",
+        "taskPriorityChanged": "changed priority of task",
+        "taskDeleted": "deleted task",
+        "memberInvited": "invited member",
+        "memberJoined": "joined project",
+        "memberRoleChanged": "changed role of member",
+        "memberRemoved": "removed member",
+        "fileUploaded": "uploaded file",
+        "fileDownloaded": "downloaded file",
+        "fileDeleted": "deleted file",
+        "noteCreated": "created note",
+        "noteUpdated": "updated note",
+        "noteDeleted": "deleted note",
+        "commentCreated": "commented",
+        "commentUpdated": "updated comment",
+        "commentDeleted": "deleted comment",
+        "unknown": "performed action"
+      },
+      "entities": {
+        "project": "project",
+        "task": "task",
+        "member": "member",
+        "file": "file",
+        "note": "note",
+        "comment": "comment",
+        "unknown": "item"
+      }
+    },
+    "upcomingDeadlines": {
+      "title": "Upcoming Deadlines",
+      "noDeadlines": "No upcoming deadlines",
+      "showingOf": "Showing {showing} of {total}",
+      "today": "Today",
+      "tomorrow": "Tomorrow",
+      "inDays": "in {days} days"
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "subtitle": "View and manage all your notifications",
+    "markAllRead": "Mark all as read",
+    "allTypes": "All types",
+    "allStatus": "All status",
+    "unread": "Unread",
+    "read": "Read",
+    "markSelectedRead": "Mark selected as read",
+    "noNotifications": "No notifications",
+    "noNotificationsDesc": "You're all caught up!",
+    "selectedCount": "{count} selected",
+    "unreadCount": "{count} unread",
+    "loading": "Loading...",
+    "loadMore": "Load more"
   }
 }

@@ -3,9 +3,7 @@
  * Server Component - fetches and renders project cards
  */
 
-import { getUserProjects } from '@/lib/db/queries/projects';
-import { getProjectStats } from '@/lib/db/queries/projects';
-import { getProjectMemberCount } from '@/lib/db/queries/projects';
+import { getUserProjects, getProjectsStatsBatch } from '@/lib/db/queries/projects';
 import { ProjectCard } from '@/components/projects/ProjectCard';
 import { ProjectsEmptyState } from '@/components/projects/ProjectsEmptyState';
 import { ProjectsLoadingSkeleton } from '@/components/projects/ProjectsLoadingSkeleton';
@@ -28,30 +26,18 @@ export async function ProjectsList() {
     return <ProjectsEmptyState />;
   }
 
-  // Fetch stats and member counts for each project in parallel
-  const projectsWithStats = await Promise.all(
-    projects.map(async (project) => {
-      const [{ data: stats }, { data: memberCount }] = await Promise.all([
-        getProjectStats(project.id),
-        getProjectMemberCount(project.id),
-      ]);
-      return {
-        ...project,
-        member_count: memberCount || 0,
-        task_stats: stats
-          ? {
-              total: stats.total_tasks,
-              completed: stats.completed_count,
-              in_progress: stats.in_progress_count,
-            }
-          : {
-              total: 0,
-              completed: 0,
-              in_progress: 0,
-            },
-      };
-    })
-  );
+  // Fetch stats and member counts for ALL projects in two batched queries
+  // (previously 2 queries per project = up to 40 round-trips on page 1).
+  const { data: statsMap } = await getProjectsStatsBatch(projects.map((p) => p.id));
+
+  const projectsWithStats = projects.map((project) => {
+    const stats = statsMap[project.id];
+    return {
+      ...project,
+      member_count: stats?.member_count ?? 0,
+      task_stats: stats?.task_stats ?? { total: 0, completed: 0, in_progress: 0 },
+    };
+  });
 
   return (
     <div

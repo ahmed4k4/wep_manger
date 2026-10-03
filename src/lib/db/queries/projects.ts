@@ -17,6 +17,7 @@ import type {
   PostgrestError,
 } from '@/types/project';
 import { notifyUsers } from './workflow-notifications';
+import { getAuthUser } from '../auth-user';
 
 // ============================================================================
 // Project Queries
@@ -29,9 +30,9 @@ export async function getUserProjects(
   filters: ProjectFilters = {}
 ): Promise<{ data: ProjectWithRelations[]; count: number; error: PostgrestError | null }> {
   const supabase = await createSupabaseServerClient();
-  const { data: userData } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
-  if (!userData.user) {
+  if (!user) {
     return { data: [], count: 0, error: { message: 'Unauthorized', code: 'UNAUTHORIZED' } };
   }
 
@@ -179,23 +180,24 @@ export async function getProjectStats(
 
   // Aggregate from tasks under the caller's RLS context. Materialized views
   // cannot enforce row-level security and could expose cross-project counts.
-  const { data: tasks, error } = await supabase
-    .from('tasks')
-    .select('status, priority, progress, due_date')
-    .eq('project_id', projectId)
-    .is('deleted_at', null);
+  // Run the tasks and member-count queries in parallel to avoid a waterfall.
+  const [{ data: tasks, error }, { count: memberCount }] = await Promise.all([
+    supabase
+      .from('tasks')
+      .select('status, priority, progress, due_date')
+      .eq('project_id', projectId)
+      .is('deleted_at', null),
+    supabase
+      .from('project_members')
+      .select('*', { count: 'exact', head: true })
+      .eq('project_id', projectId),
+  ]);
 
   if (error) return { data: null, error };
   const rows = tasks || [];
   const count = (predicate: (task: (typeof rows)[number]) => boolean) =>
     rows.filter(predicate).length;
   const today = new Date().toISOString().slice(0, 10);
-
-  // Get member count separately
-  const { count: memberCount } = await supabase
-    .from('project_members')
-    .select('*', { count: 'exact', head: true })
-    .eq('project_id', projectId);
 
   return {
     data: {
@@ -217,6 +219,54 @@ export async function getProjectStats(
     },
     error: null,
   };
+}
+
+/**
+ * Get stats for many projects at once (member counts + task counts).
+ * Replaces the per-project N+1 pattern (2 queries/project) with 2 total queries.
+ */
+export interface ProjectCardStats {
+  member_count: number;
+  task_stats: { total: number; completed: number; in_progress: number };
+}
+
+export async function getProjectsStatsBatch(
+  projectIds: string[]
+): Promise<{ data: Record<string, ProjectCardStats>; error: PostgrestError | null }> {
+  if (!projectIds.length) return { data: {}, error: null };
+
+  const supabase = await createSupabaseServerClient();
+
+  const [{ data: members, error: membersError }, { data: tasks, error: tasksError }] =
+    await Promise.all([
+      supabase.from('project_members').select('project_id').in('project_id', projectIds),
+      supabase
+        .from('tasks')
+        .select('project_id, status')
+        .in('project_id', projectIds)
+        .is('deleted_at', null),
+    ]);
+
+  if (membersError) return { data: {}, error: membersError };
+  if (tasksError) return { data: {}, error: tasksError };
+
+  const result: Record<string, ProjectCardStats> = {};
+  for (const id of projectIds) {
+    result[id] = { member_count: 0, task_stats: { total: 0, completed: 0, in_progress: 0 } };
+  }
+  for (const member of members || []) {
+    const bucket = result[member.project_id];
+    if (bucket) bucket.member_count += 1;
+  }
+  for (const task of tasks || []) {
+    const bucket = result[task.project_id];
+    if (!bucket) continue;
+    bucket.task_stats.total += 1;
+    if (task.status === 'COMPLETED') bucket.task_stats.completed += 1;
+    else if (task.status === 'IN_PROGRESS') bucket.task_stats.in_progress += 1;
+  }
+
+  return { data: result, error: null };
 }
 
 /**

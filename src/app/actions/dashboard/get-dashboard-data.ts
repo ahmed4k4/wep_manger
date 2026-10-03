@@ -5,6 +5,7 @@
 
 'use server';
 
+import { cache } from 'react';
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/db/supabase-server';
 import { getCurrentUser, checkIsAdmin, checkIsProjectManager, requireAuth } from '@/lib/authorization';
 import type { ProjectStatus, TaskStatus, TaskPriority, ProjectRole, Profile, Project, Task } from '@/types/project';
@@ -151,13 +152,16 @@ export interface DashboardResponse<T> {
 // Get User Role Context
 // ============================================================================
 
-async function getUserContext() {
+// Cached per request: getFullDashboardData calls every section function, each of
+// which previously re-resolved the user + role checks. React cache collapses
+// these to a single resolution per request.
+const getUserContext = cache(async () => {
   const user = await requireAuth();
   const isAdmin = await checkIsAdmin(user.id);
   const isPM = await checkIsProjectManager(user.id);
-  
+
   return { user, isAdmin, isPM };
-}
+});
 
 // ============================================================================
 // KPIs

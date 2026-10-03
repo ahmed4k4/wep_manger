@@ -164,5 +164,149 @@
     "title": "بحث",
     "startSearching": "ابدأ البحث",
     "startSearchingDesc": "اكتب للبحث عبر المشاريع، المهام، الملفات، الملاحظات، والأشخاص"
+  },
+  "dashboard": {
+    "tasksByStatus": {
+      "title": "المهام حسب الحالة",
+      "description": "توزيع المهام عبر الحالات"
+    },
+    "tasksByPriority": {
+      "title": "المهام حسب الأولوية",
+      "description": "توزيع المهام حسب مستوى الأولوية"
+    },
+    "completionTrend": {
+      "title": "اتجاه الإكمال",
+      "description": "المهام المكتملة مقابل المُنشأة عبر الزمن"
+    },
+    "projectProgress": {
+      "title": "تقدم المشروع",
+      "description": "تقدم مشاريعك النشطة",
+      "label": "تقدم المشروع",
+      "noProjects": "لا توجد مشاريع",
+      "tasks": "{completed} من {total} مهمة مكتملة"
+    },
+    "teamWorkload": {
+      "title": "عبء عمل الفريق",
+      "description": "توزيع المهام عبر أعضاء الفريق",
+      "label": "عبء عمل الفريق",
+      "noMembers": "لا يوجد أعضاء",
+      "inProgress": "قيد التنفيذ",
+      "todo": "مطلوب",
+      "overdue": "متأخرة"
+    },
+    "kpis": {
+      "totalProjects": "إجمالي المشاريع",
+      "activeProjects": "مشاريع نشطة",
+      "completedProjects": "مشاريع مكتملة",
+      "totalTasks": "إجمالي المهام",
+      "inProgressTasks": "قيد التنفيذ",
+      "completedTasks": "مهام مكتملة",
+      "overdueTasks": "مهام متأخرة",
+      "teamMembers": "أعضاء الفريق",
+      "totalFiles": "إجمالي الملفات"
+    },
+    "myWork": {
+      "title": "عملي",
+      "todayTasks": "اليوم",
+      "overdueTasks": "متأخرة",
+      "upcomingTasks": "القادمة",
+      "allAssignedTasks": "جميع المهام المعينة",
+      "noTodayTasks": "لا توجد مهام مستحقة اليوم",
+      "noOverdueTasks": "لا توجد مهام متأخرة",
+      "noUpcomingTasks": "لا توجد مهام قادمة",
+      "noAssignedTasks": "لا توجد مهام معينة",
+      "overdue": "متأخرة",
+      "showingOf": "عرض {showing} من {total}",
+      "status": {
+        "todo": "مطلوب",
+        "in_progress": "قيد التنفيذ",
+        "review": "قيد المراجعة",
+        "blocked": "محظورة",
+        "completed": "مكتملة"
+      },
+      "priority": {
+        "low": "منخفضة",
+        "medium": "متوسطة",
+        "high": "عالية",
+        "urgent": "عاجلة"
+      }
+    },
+    "overdue": {
+      "title": "العناصر المتأخرة",
+      "allCaughtUp": "لا شيء متأخر!",
+      "noOverdueItems": "لا توجد عناصر متأخرة",
+      "showingOf": "عرض {showing} من {total}",
+      "overdue": "متأخرة منذ {days} أيام",
+      "wasDue": "كان مستحقاً",
+      "oneDayAgo": "منذ يوم واحد",
+      "daysAgo": "منذ {days} أيام",
+      "weeksAgo": "منذ {weeks} أسابيع",
+      "monthsAgo": "منذ {months} أشهر"
+    },
+    "recentActivity": {
+      "label": "النشاط الأخير",
+      "noActivity": "لا يوجد نشاط حديث",
+      "unknownUser": "مستخدم غير معروف",
+      "inProject": "في",
+      "activity": {
+        "projectCreated": "أنشأ المشروع",
+        "projectUpdated": "حدّث المشروع",
+        "projectArchived": "أرشف المشروع",
+        "projectDeleted": "حذف المشروع",
+        "taskCreated": "أنشأ المهمة",
+        "taskUpdated": "حدّث المهمة",
+        "taskStatusChanged": "غيّر حالة المهمة",
+        "taskAssigned": "عيّن المهمة",
+        "taskPriorityChanged": "غيّر أولوية المهمة",
+        "taskDeleted": "حذف المهمة",
+        "memberInvited": "دعا عضواً",
+        "memberJoined": "انضم للمشروع",
+        "memberRoleChanged": "غيّر دور العضو",
+        "memberRemoved": "أزال العضو",
+        "fileUploaded": "رفع ملفاً",
+        "fileDownloaded": "نزّل ملفاً",
+        "fileDeleted": "حذف ملفاً",
+        "noteCreated": "أنشأ ملاحظة",
+        "noteUpdated": "حدّث ملاحظة",
+        "noteDeleted": "حذف ملاحظة",
+        "commentCreated": "علّق",
+        "commentUpdated": "حدّث تعليقاً",
+        "commentDeleted": "حذف تعليقاً",
+        "unknown": "نفّذ إجراءً"
+      },
+      "entities": {
+        "project": "المشروع",
+        "task": "المهمة",
+        "member": "العضو",
+        "file": "الملف",
+        "note": "الملاحظة",
+        "comment": "التعليق",
+        "unknown": "العنصر"
+      }
+    },
+    "upcomingDeadlines": {
+      "title": "المواعيد القادمة",
+      "noDeadlines": "لا توجد مواعيد قادمة",
+      "showingOf": "عرض {showing} من {total}",
+      "today": "اليوم",
+      "tomorrow": "غداً",
+      "inDays": "خلال {days} أيام"
+    }
+  },
+  "notifications": {
+    "title": "الإشعارات",
+    "subtitle": "عرض وإدارة جميع إشعاراتك",
+    "markAllRead": "تحديد الكل كمقروء",
+    "allTypes": "جميع الأنواع",
+    "allStatus": "جميع الحالات",
+    "unread": "غير مقروء",
+    "read": "مقروء",
+    "markSelectedRead": "تحديد المحدد كمقروء",
+    "noNotifications": "لا توجد إشعارات",
+    "noNotificationsDesc": "أنت على اطلاع بكل شيء!",
+    "selectedCount": "{count} محدد",
+    "unreadCount": "{count} غير مقروء",
+    "loading": "جاري التحميل...",
+    "loadMore": "تحميل المزيد"
   }
 }

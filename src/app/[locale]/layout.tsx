@@ -9,7 +9,7 @@ import { notFound } from 'next/navigation';
 import { LOCALES, type Locale } from '@/shared/lib/i18n/config';
 import { getDirection } from '@/shared/lib/i18n/formatters';
 import { AppShell } from '@/components/app-shell';
-import { createSupabaseServerClient } from '@/lib/db/supabase-server';
+import { getAuthUser } from '@/lib/db/auth-user';
 import { ThemeProvider } from '@/components/theme-provider';
 import '@/app/tailwind.generated.css';
 
@@ -27,8 +27,7 @@ export default async function LocaleLayout({
   unstable_setRequestLocale(locale);
   const messages = await getMessages();
   const direction = getDirection(locale);
-  const supabase = await createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   const account = user ? { name: user.user_metadata?.full_name || user.email || '', email: user.email || '' } : null;
 
   return (
