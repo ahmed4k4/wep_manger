@@ -5,6 +5,7 @@
 
 import { getUserProjects } from '@/lib/db/queries/projects';
 import { getProjectStats } from '@/lib/db/queries/projects';
+import { getProjectMemberCount } from '@/lib/db/queries/projects';
 import { ProjectCard } from '@/components/projects/ProjectCard';
 import { ProjectsEmptyState } from '@/components/projects/ProjectsEmptyState';
 import { ProjectsLoadingSkeleton } from '@/components/projects/ProjectsLoadingSkeleton';
@@ -27,13 +28,16 @@ export async function ProjectsList() {
     return <ProjectsEmptyState />;
   }
 
-  // Fetch stats for each project in parallel
+  // Fetch stats and member counts for each project in parallel
   const projectsWithStats = await Promise.all(
     projects.map(async (project) => {
-      const { data: stats } = await getProjectStats(project.id);
+      const [{ data: stats }, { data: memberCount }] = await Promise.all([
+        getProjectStats(project.id),
+        getProjectMemberCount(project.id),
+      ]);
       return {
         ...project,
-        member_count: project.members?.length || 0,
+        member_count: memberCount || 0,
         task_stats: stats
           ? {
               total: stats.total_tasks,

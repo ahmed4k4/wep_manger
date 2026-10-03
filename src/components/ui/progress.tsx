@@ -1,34 +1,58 @@
-"use client";
+/**
+ * Progress Component
+ * Premium SaaS design system
+ */
 
-import * as React from "react";
-import { cn } from "@/lib/utils";
+'use client';
 
-interface ProgressProps extends React.HTMLAttributes<HTMLDivElement> {
-  value?: number;
-  max?: number;
-}
+import * as React from 'react';
+import * as ProgressPrimitive from '@radix-ui/react-progress';
+import { cn } from '@/lib/utils';
 
-const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
-  ({ className, value = 0, max = 100, ...props }, ref) => {
-    const percentage = Math.min(Math.max((value / max) * 100, 0), 100);
+type ProgressVariant = 'default' | 'success' | 'warning' | 'danger';
+type ProgressSize = 'sm' | 'md' | 'lg';
 
-    return (
-      <div
-        ref={ref}
-        className={cn(
-          "relative h-2 w-full overflow-hidden rounded-full bg-secondary",
-          className
-        )}
-        {...props}
-      >
-        <div
-          className="h-full bg-primary transition-all duration-300 ease-out"
-          style={{ width: `${percentage}%` }}
-        />
-      </div>
-    );
+const Progress = React.forwardRef<
+  React.ElementRef<typeof ProgressPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root> & {
+    variant?: ProgressVariant;
+    size?: ProgressSize;
   }
-);
-Progress.displayName = "Progress";
+>(({ className, value, variant = 'default', size = 'md', ...props }, ref) => {
+  const variantColors: Record<ProgressVariant, string> = {
+    default: 'bg-primary',
+    success: 'bg-green-500',
+    warning: 'bg-yellow-500',
+    danger: 'bg-red-500',
+  };
+
+  const sizeClasses: Record<ProgressSize, string> = {
+    sm: 'h-1.5',
+    md: 'h-2.5',
+    lg: 'h-4',
+  };
+
+  return (
+    <ProgressPrimitive.Root
+      ref={ref}
+      className={cn(
+        'relative overflow-hidden rounded-full bg-secondary',
+        sizeClasses[size],
+        className
+      )}
+      value={value}
+      {...props}
+    >
+      <ProgressPrimitive.Indicator
+        className={cn(
+          'h-full w-full flex-1 rounded-full transition-all duration-500 ease-out',
+          variantColors[variant]
+        )}
+        style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
+      />
+    </ProgressPrimitive.Root>
+  );
+});
+Progress.displayName = ProgressPrimitive.Root.displayName;
 
 export { Progress };

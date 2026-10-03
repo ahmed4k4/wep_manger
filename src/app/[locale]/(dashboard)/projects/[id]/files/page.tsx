@@ -4,7 +4,9 @@
  */
 
 import { getProjectFilesAction, getUserFilesAction } from '@/app/actions/files-queries';
+import { getProjectById, getProjectStats } from '@/lib/db/queries/projects';
 import { FilesClient } from './files-client';
+import { notFound } from 'next/navigation';
 
 interface FilesPageProps {
   params: Promise<{ id: string }>;
@@ -15,6 +17,14 @@ export const dynamic = 'force-dynamic';
 
 export default async function FilesPage({ params }: FilesPageProps) {
   const { id: projectId } = await params;
+
+  // Fetch project info for header
+  const { data: project, error: projectError } = await getProjectById(projectId);
+  const { data: stats } = await getProjectStats(projectId);
+
+  if (projectError || !project) {
+    notFound();
+  }
 
   // Fetch initial data for project files (first page)
   const projectFilesResult = await getProjectFilesAction({
@@ -39,6 +49,8 @@ export default async function FilesPage({ params }: FilesPageProps) {
   return (
     <FilesClient
       projectId={projectId}
+      project={project}
+      stats={stats}
       initialProjectFiles={initialProjectFiles}
       initialUserFiles={initialUserFiles}
     />

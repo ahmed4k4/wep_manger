@@ -950,7 +950,14 @@ CREATE POLICY "Members can view project members"
 ON public.project_members
 FOR SELECT
 USING (
-    public.is_project_member(project_id, auth.uid())
+    -- Direct check without helper function to avoid RLS recursion
+    user_id = auth.uid()
+    OR EXISTS (
+        SELECT 1 FROM public.project_members pm2
+        WHERE pm2.project_id = project_members.project_id
+        AND pm2.user_id = auth.uid()
+        AND pm2.role IN ('OWNER', 'ADMIN')
+    )
     OR public.is_admin(auth.uid())
 );
 

@@ -1,6 +1,7 @@
 /**
  * Activity Timeline Client Component
  * Fetches and displays activity logs with pagination
+ * Supports initial server-rendered data for faster first paint
  */
 
 'use client';
@@ -13,12 +14,13 @@ import { ThemeSwitcher } from '@/components/theme-switcher';
 interface ActivityTimelineClientProps {
   projectId: string;
   pageSize?: number;
+  initialActivities?: ActivityLogWithUser[];
 }
 
-export function ActivityTimelineClient({ projectId, pageSize = 50 }: ActivityTimelineClientProps) {
-  const [activities, setActivities] = useState<ActivityLogWithUser[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasMore, setHasMore] = useState(false);
+export function ActivityTimelineClient({ projectId, pageSize = 50, initialActivities = [] }: ActivityTimelineClientProps) {
+  const [activities, setActivities] = useState<ActivityLogWithUser[]>(initialActivities);
+  const [isLoading, setIsLoading] = useState(initialActivities.length === 0);
+  const [hasMore, setHasMore] = useState(initialActivities.length >= pageSize);
   const [page, setPage] = useState(1);
 
   const fetchActivities = useCallback(async (pageNum: number, append = false) => {
@@ -45,10 +47,12 @@ export function ActivityTimelineClient({ projectId, pageSize = 50 }: ActivityTim
   }, [projectId, pageSize]);
 
   useEffect(() => {
-    setIsLoading(true);
-    setPage(1);
-    fetchActivities(1, false);
-  }, [fetchActivities]);
+    if (initialActivities.length === 0) {
+      setIsLoading(true);
+      setPage(1);
+      fetchActivities(1, false);
+    }
+  }, [fetchActivities, initialActivities.length]);
 
   const loadMore = () => {
     if (isLoading || !hasMore) return;

@@ -27,6 +27,11 @@ AS $$
     );
 $$;
 
+-- Note: The project_members SELECT policy should NOT use is_project_member() 
+-- to avoid infinite recursion. The migration 20261002120000 updates this policy
+-- to use a direct check instead. This function is kept for other uses.
+-- The main migration (docs/database/migrations.sql) contains the corrected policy.
+
 CREATE OR REPLACE FUNCTION public.get_user_project_role(p_project_id uuid, p_user_id uuid)
 RETURNS project_role
 LANGUAGE sql

@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocale } from 'next-intl';
 import { Button } from '@/components/ui/button';
-import { X, Download, RotateCw, Minus, Plus } from 'lucide-react';
+import { X, Download, RotateCw, Minus, Plus, AlertCircle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getProjectFilePreviewUrl, getUserFilePreviewUrl, getProjectFileDownloadUrl, getUserFileDownloadUrl } from '@/app/actions/files';
 import { toast } from 'sonner';
@@ -196,4 +196,5 @@ export function FilePreview({ fileId, type, mimeType, fileName, onClose }: FileP
 }
 
 // Need to import AlertCircle and RefreshCw
-import { AlertCircle, RefreshCw } from 'lucide-react';
+
+

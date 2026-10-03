@@ -44,21 +44,27 @@ export async function getUserProjects(
     sort_order = 'desc',
   } = filters;
 
+  // First, get projects without members to avoid RLS issues with nested selects
   let query = supabase
     .from('projects')
     .select(
       `
-      *,
-      owner:profiles!projects_owner_id_fkey(*),
-      members:project_members(
-        *,
-        profile:profiles!project_members_user_id_fkey(*)
-      )
+      id,
+      name,
+      key,
+      description,
+      status,
+      owner_id,
+      created_at,
+      updated_at,
+      deleted_at,
+      owner:profiles!projects_owner_id_fkey(id, full_name, avatar_url, email)
     `,
       { count: 'exact' }
     )
-    .is('deleted_at', null)
-    .or(`owner_id.eq.${userData.user.id},project_members.user_id.eq.${userData.user.id}`);
+    .is('deleted_at', null);
+    // RLS policy "Members can view active projects" handles filtering:
+    // owner_id = auth.uid() OR public.is_project_member(id, auth.uid()) OR public.is_admin(auth.uid())
 
   if (status) {
     query = query.eq('status', status);
@@ -77,7 +83,15 @@ export async function getUserProjects(
     return { data: [], count: 0, error };
   }
 
-  return { data: data as ProjectWithRelations[], count: count || 0, error: null };
+  // Transform the data to match ProjectWithRelations type
+  // Supabase returns arrays for joined relations, but we need single objects
+  const transformedData = (data || []).map((project: any) => ({
+    ...project,
+    owner: project.owner?.[0] || null,
+    members: [], // Members will be fetched separately if needed
+  }));
+
+  return { data: transformedData as ProjectWithRelations[], count: count || 0, error: null };
 }
 
 /**
@@ -92,11 +106,26 @@ export async function getProjectById(
     .from('projects')
     .select(
       `
-      *,
-      owner:profiles!projects_owner_id_fkey(*),
+      id,
+      name,
+      key,
+      description,
+      status,
+      owner_id,
+      created_at,
+      updated_at,
+      deleted_at,
+      owner:profiles!projects_owner_id_fkey(id, full_name, avatar_url, email),
       members:project_members(
-        *,
-        profile:profiles!project_members_user_id_fkey(*)
+        id,
+        project_id,
+        user_id,
+        role,
+        joined_at,
+        invited_by,
+        invited_at,
+        accepted_at,
+        profile:profiles!project_members_user_id_fkey(id, full_name, avatar_url, email)
       )
     `
     )
@@ -108,7 +137,36 @@ export async function getProjectById(
     return { data: null, error };
   }
 
-  return { data: data as ProjectWithRelations, error: null };
+  // Transform the data to match ProjectWithRelations type
+  if (data) {
+    const transformedData = {
+      ...data,
+      owner: data.owner?.[0] || null,
+      members: (data.members || []).map((m: any) => ({
+        ...m,
+        profile: m.profile?.[0] || null,
+      })),
+    };
+    return { data: transformedData as ProjectWithRelations, error: null };
+  }
+
+  return { data: null, error: null };
+}
+
+/**
+ * Get project member count
+ */
+export async function getProjectMemberCount(
+  projectId: string
+): Promise<{ data: number; error: PostgrestError | null }> {
+  const supabase = await createSupabaseServerClient();
+
+  const { count, error } = await supabase
+    .from('project_members')
+    .select('*', { count: 'exact', head: true })
+    .eq('project_id', projectId);
+
+  return { data: count || 0, error };
 }
 
 /**
@@ -174,11 +232,28 @@ export async function createProject(
     return { data: null, error: { message: 'Unauthorized', code: 'UNAUTHORIZED' } };
   }
 
+  // Validate and clean key format before inserting (match client-side cleaning)
+  const key = input.key.toUpperCase().trim().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+  // Ensure it starts with a letter
+  const finalKey = key && /^[A-Z]/.test(key) ? key : 'P' + key;
+  // Ensure minimum length of 2
+  const validatedKey = finalKey.length >= 2 ? finalKey : (finalKey + 'X').slice(0, 10);
+  
+  if (!/^[A-Z][A-Z0-9]{1,9}$/.test(validatedKey)) {
+    return { 
+      data: null, 
+      error: { 
+        message: 'Project key must start with a letter, followed by 1-9 letters/numbers (2-10 total).', 
+        code: 'INVALID_KEY_FORMAT' 
+      } 
+    };
+  }
+
   const { data, error } = await supabase
     .from('projects')
     .insert({
       name: input.name,
-      key: input.key.toUpperCase(),
+      key: validatedKey,
       description: input.description || null,
       owner_id: userData.user.id,
       status: 'ACTIVE',
@@ -190,14 +265,9 @@ export async function createProject(
     return { data: null, error };
   }
 
-  // Add owner as project member
-  await supabase.from('project_members').insert({
-    project_id: data.id,
-    user_id: userData.user.id,
-    role: 'OWNER',
-    invited_by: userData.user.id,
-    accepted_at: new Date().toISOString(),
-  });
+  // Owner is automatically added to project_members by the database trigger
+  // (add_project_owner_membership) - no need to insert manually
+  // This avoids duplicate insert conflicts with the trigger's ON CONFLICT handler
 
   // Log activity (using admin client for system operations)
   await logProjectActivity(data.id, userData.user.id, 'PROJECT_CREATED', 'project', data.id, {
@@ -378,8 +448,15 @@ export async function getProjectMembers(
     .from('project_members')
     .select(
       `
-      *,
-      profile:profiles!project_members_user_id_fkey(*)
+      id,
+      project_id,
+      user_id,
+      role,
+      joined_at,
+      invited_by,
+      invited_at,
+      accepted_at,
+      profile:profiles!project_members_user_id_fkey(id, full_name, avatar_url, email)
     `
     )
     .eq('project_id', projectId)
@@ -390,6 +467,13 @@ export async function getProjectMembers(
     return { data: [], error };
   }
 
+  // Transform the data to match ProjectMemberWithProfile type
+  // Supabase returns arrays for joined relations, but we need single objects
+  const transformedData = (data || []).map((member: any) => ({
+    ...member,
+    profile: member.profile?.[0] || null,
+  }));
+
   // Sort by role hierarchy: OWNER > ADMIN > MEMBER > VIEWER
   const roleOrder: Record<ProjectMember['role'], number> = {
     OWNER: 0,
@@ -398,7 +482,7 @@ export async function getProjectMembers(
     VIEWER: 3,
   };
 
-  const sorted = (data as ProjectMemberWithProfile[]).sort(
+  const sorted = (transformedData as ProjectMemberWithProfile[]).sort(
     (a, b) => roleOrder[a.role] - roleOrder[b.role]
   );
 

@@ -12,6 +12,7 @@ import {
   deleteTask as deleteTaskQuery,
   getTaskById as getTaskByIdQuery,
   reorderTasks as reorderTasksQuery,
+  getTasks as getTasksQuery,
   canManageTask,
   canAssignTask,
   canCommentOnTask,
@@ -29,6 +30,7 @@ import type {
   UpdateCommentInput,
   TaskStatus,
   TaskPriority,
+  TaskFilters,
 } from '@/types/project';
 
 // ============================================================================
@@ -468,5 +470,24 @@ export async function removeTaskAttachmentAction(
     return { success: true };
   } catch {
     return { success: false, error: 'Failed to remove attachment' };
+  }
+}
+
+/**
+ * Get tasks with filters, pagination
+ */
+export async function getTasksAction(
+  filters: TaskFilters
+): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
+  try {
+    const { data, error, count } = await getTasksQuery(filters);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data || [], count: count || 0 };
+  } catch {
+    return { success: false, error: 'Failed to fetch tasks' };
   }
 }

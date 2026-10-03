@@ -39,6 +39,7 @@ interface FileCardProps {
   onDelete?: (fileId: string) => void;
   canManage?: boolean;
   showUploader?: boolean;
+  showProject?: boolean;
 }
 
 export function FileCard({

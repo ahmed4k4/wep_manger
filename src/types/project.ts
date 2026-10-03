@@ -7,7 +7,9 @@
 // Enums
 // ============================================================================
 
-export type UserRole = 'ADMIN' | 'USER';
+export type UserRole = 'ADMIN' | 'PROJECT_MANAGER' | 'USER';
+
+export type UserStatus = 'active' | 'inactive';
 
 export type ProjectStatus = 'ACTIVE' | 'ARCHIVED' | 'ON_HOLD';
 
@@ -58,11 +60,98 @@ export interface Profile {
   full_name: string | null;
   avatar_url: string | null;
   role: UserRole;
+  status: UserStatus;
   locale: string;
   theme: 'light' | 'dark' | 'system';
   notification_preferences: Record<string, boolean>;
   created_at: string;
   updated_at: string;
+  // Extended fields for team management
+  last_sign_in_at?: string | null;
+  phone?: string | null;
+  department?: string | null;
+  job_title?: string | null;
+}
+
+// ============================================================================
+// Settings Types
+// ============================================================================
+
+export type Theme = 'light' | 'dark' | 'system';
+export type Locale = 'en' | 'ar';
+
+export interface NotificationPreferences {
+  task_assignments: boolean;
+  comments: boolean;
+  deadlines: boolean;
+  project_updates: boolean;
+  files: boolean;
+}
+
+export interface UserSettings {
+  // Profile settings
+  full_name: string;
+  avatar_url: string;
+  phone: string;
+  department: string;
+  job_title: string;
+  
+  // Appearance settings
+  theme: Theme;
+  locale: Locale;
+  
+  // Notification preferences
+  notification_preferences: NotificationPreferences;
+}
+
+export interface SystemSetting {
+  id: string;
+  key: string;
+  value: any;
+  description: string | null;
+  category: 'project_defaults' | 'file_limits' | 'task_statuses' | 'priorities' | 'company';
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type SystemSettingsCategory = 'project_defaults' | 'file_limits' | 'task_statuses' | 'priorities' | 'company';
+
+export interface SystemSettingsByCategory {
+  project_defaults: SystemSetting[];
+  file_limits: SystemSetting[];
+  task_statuses: SystemSetting[];
+  priorities: SystemSetting[];
+  company: SystemSetting[];
+}
+
+export interface UserSettingsInput {
+  full_name?: string;
+  avatar_url?: string;
+  phone?: string;
+  department?: string;
+  job_title?: string;
+  theme?: Theme;
+  locale?: Locale;
+  notification_preferences?: Partial<NotificationPreferences>;
+}
+
+export interface SystemSettingInput {
+  key: string;
+  value: any;
+  description?: string;
+  category: SystemSettingsCategory;
+  is_public?: boolean;
+}
+
+export interface UserProfile extends Profile {
+  // Computed/joined fields for profile page
+  assigned_projects_count?: number;
+  assigned_tasks_count?: number;
+  completed_tasks_count?: number;
+  overdue_tasks_count?: number;
+  projects?: (Project & { role: ProjectRole })[];
+  tasks?: TaskWithRelations[];
 }
 
 export interface Project {
@@ -138,6 +227,29 @@ export interface TaskAttachment {
   // Joined fields
   file?: ProjectFile;
   uploader?: Profile;
+}
+
+export interface TaskChecklist {
+  id: string;
+  task_id: string;
+  title: string;
+  is_completed: boolean;
+  position: number;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+  completed_by: string | null;
+}
+
+export interface Tag {
+  id: string;
+  project_id: string;
+  name: string;
+  color: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ProjectFile {
@@ -590,6 +702,8 @@ export type TaskWithRelations = Task & {
   reporter: Profile | null;
   comments: TaskComment[];
   attachments: (TaskAttachment & { file: ProjectFile })[];
+  checklists: TaskChecklist[];
+  tags: Tag[];
 };
 
 export type ProjectMemberWithProfile = ProjectMember & { profile: Profile };

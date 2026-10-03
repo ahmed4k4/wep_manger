@@ -1,11 +1,12 @@
 /**
  * Project Activity Page
- * Displays activity timeline for a project
+ * Displays activity timeline for a project - Server Component with initial data
  */
 
 import { Metadata } from 'next';
 import { Suspense } from 'react';
-import { getProjectById } from '@/lib/db/queries/projects';
+import { getProjectById, getProjectStats } from '@/lib/db/queries/projects';
+import { getProjectRecentActivity } from '@/lib/db/queries/activity';
 import { ActivityTimelineClient } from '@/components/activity/ActivityTimelineClient';
 import { ActivityLoadingSkeleton } from '@/components/activity/ActivityLoadingSkeleton';
 import { ProjectSidebar } from '@/components/projects/ProjectSidebar';
@@ -29,9 +30,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function ActivityPage({ params }: PageProps) {
   const { id } = await params;
-  const { data: project } = await getProjectById(id);
 
-  if (!project) {
+  const [{ data: project, error: projectError }, { data: stats }, { data: initialActivity }] =
+    await Promise.all([
+      getProjectById(id),
+      getProjectStats(id),
+      getProjectRecentActivity(id, 50),
+    ]);
+
+  if (projectError || !project) {
     return null; // Will be handled by not-found
   }
 
@@ -39,7 +46,7 @@ export default async function ActivityPage({ params }: PageProps) {
     <div className="flex h-screen bg-background">
       <ProjectSidebar project={project} />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <ProjectHeader project={project} />
+        <ProjectHeader project={project} stats={stats} />
         <main className="flex-1 overflow-auto p-6">
           <div className="mb-6">
             <h1 className="text-2xl font-bold tracking-tight">{project.name} Activity</h1>
@@ -48,7 +55,7 @@ export default async function ActivityPage({ params }: PageProps) {
             </p>
           </div>
           <Suspense fallback={<ActivityLoadingSkeleton />}>
-            <ActivityTimelineClient projectId={id} />
+            <ActivityTimelineClient projectId={id} initialActivities={initialActivity || []} />
           </Suspense>
         </main>
       </div>

@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { getTaskById, getTaskComments, getTaskAttachments } from '@/lib/db/queries/tasks';
 import { getUserProjectRole } from '@/lib/db/queries/projects';
 import { createSupabaseServerClient } from '@/lib/db/supabase-server';
-import type { TaskAttachment } from '@/types/project';
+import type { TaskAttachment, TaskChecklist, Tag } from '@/types/project';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,13 +24,17 @@ export default async function TaskDetailsPage({ params }: { params: Promise<{ id
   if (!user || !task || task.project_id !== projectId) notFound();
   if (commentsResult.error || attachmentsResult.error) throw new Error(commentsResult.error?.message || attachmentsResult.error?.message);
 
-  const [role, membersResult, filesResult] = await Promise.all([
+  const [role, membersResult, filesResult, checklistsResult, tagsResult] = await Promise.all([
     getUserProjectRole(projectId, user.id),
     supabase.from('project_members').select('user_id, role, profile:profiles!project_members_user_id_fkey(id, full_name, email)').eq('project_id', projectId),
     supabase.from('project_files').select('id, name').eq('project_id', projectId).is('deleted_at', null).order('name'),
+    supabase.from('task_checklists').select('*').eq('task_id', taskId).order('position'),
+    supabase.from('task_tags').select('tags(*)').eq('task_id', taskId),
   ]);
   if (membersResult.error || filesResult.error) throw new Error(membersResult.error?.message || filesResult.error?.message);
   const members = (membersResult.data || []).filter((member: any) => member.role !== 'VIEWER').map((member: any) => ({ id: member.user_id, name: member.profile?.full_name || member.profile?.email || member.user_id }));
+  const checklists = (checklistsResult.data || []) as TaskChecklist[];
+  const tags = (tagsResult.data || []).map((t: any) => t.tags).filter(Boolean) as Tag[];
   const controlsAllowed = role === 'OWNER' || role === 'ADMIN' || task.assignee_id === user.id || task.created_by === user.id;
   const canAssign = role === 'OWNER' || role === 'ADMIN';
   const ar = locale === 'ar';
@@ -44,7 +48,7 @@ export default async function TaskDetailsPage({ params }: { params: Promise<{ id
       {task.description && <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{task.description}</p>}
       <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground"><span className="flex items-center gap-2"><UserRound size={15} />{task.assignee?.full_name || (ar ? 'غير معيّن' : 'Unassigned')}</span>{task.due_date && <span className="flex items-center gap-2"><CalendarDays size={15} />{new Date(task.due_date).toLocaleDateString(locale)}</span>}<span>{ar ? `التقدم ${task.progress}%` : `${task.progress}% complete`}</span></div>
     </CardContent></Card>
-    {controlsAllowed && <TaskDetailsControls task={task} members={members} canAssign={canAssign} />}
+    {controlsAllowed && <TaskDetailsControls task={task} members={members} canAssign={canAssign} checklists={checklists} tags={tags} projectId={projectId} />}
     <TaskAttachmentsPanel taskId={taskId} projectId={projectId} attachments={attachments} files={filesResult.data || []} canManage={controlsAllowed} currentUserId={user.id} canManageAll={canAssign} />
     <Card className="rounded-2xl"><CardContent className="p-5"><CommentSection taskId={taskId} currentUserId={user.id} initialComments={commentsResult.data} /></CardContent></Card>
   </main>;

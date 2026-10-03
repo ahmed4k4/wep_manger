@@ -8,15 +8,24 @@
 import { useState } from 'react';
 import { TaskCard } from '@/components/tasks/TaskCard';
 import { TasksEmptyState } from '@/components/tasks/TasksEmptyState';
-import type { TaskWithRelations } from '@/types/project';
+import type { Task } from '@/types/project';
+import type { Profile } from '@/types/project';
+
+interface TaskWithRelationsList extends Task {
+  assignee: Profile | undefined;
+  creator: Profile | undefined;
+  reporter: Profile | undefined;
+  comments_count?: number;
+  attachments_count?: number;
+}
 
 interface MyTasksClientProps {
-  initialTasks: TaskWithRelations[];
+  initialTasks: TaskWithRelationsList[];
   projectId: string;
 }
 
 export function MyTasksClient({ initialTasks, projectId }: MyTasksClientProps) {
-  const [tasks, setTasks] = useState<TaskWithRelations[]>(initialTasks);
+  const [tasks, setTasks] = useState<TaskWithRelationsList[]>(initialTasks);
 
   if (tasks.length === 0) {
     return <TasksEmptyState projectId={projectId} />;

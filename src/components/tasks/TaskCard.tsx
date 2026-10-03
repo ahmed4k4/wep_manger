@@ -33,7 +33,7 @@ import {
   ChevronRight,
   User,
 } from 'lucide-react';
-import type { Task, TaskStatus, TaskPriority, Profile } from '@/types/project';
+import type { Task, TaskStatus, TaskPriority, Profile, TaskChecklist, Tag } from '@/types/project';
 import { useRouter } from 'next/navigation';
 import { updateTaskStatusAction, updateTaskPriorityAction, deleteTaskAction } from '@/app/actions/tasks';
 import { toast } from 'sonner';
@@ -170,6 +170,13 @@ export function TaskCard({
   }
 
   if (variant === 'kanban') {
+    // Calculate checklist progress if checklists exist
+    const checklists = (task as any).checklists as TaskChecklist[] | undefined;
+    const tags = (task as any).tags as Tag[] | undefined;
+    const totalChecklists = checklists?.length || 0;
+    const completedChecklists = checklists?.filter(c => c.is_completed).length || 0;
+    const checklistProgress = totalChecklists > 0 ? Math.round((completedChecklists / totalChecklists) * 100) : 0;
+
     return (
       <Card
         className={cn(
@@ -247,6 +254,30 @@ export function TaskCard({
             <p className="text-sm text-muted-foreground line-clamp-2">{task.description}</p>
           )}
 
+          {/* Tags */}
+          {tags && tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {tags.slice(0, 3).map(tag => (
+                <span
+                  key={tag.id}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full"
+                  style={{
+                    backgroundColor: `${tag.color}20`,
+                    color: tag.color,
+                    border: `1px solid ${tag.color}40`,
+                  }}
+                >
+                  {tag.name}
+                </span>
+              ))}
+              {tags.length > 3 && (
+                <span className="text-xs text-muted-foreground px-1">
+                  +{tags.length - 3}
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className={cn(statusColors[task.status])}>
@@ -257,12 +288,31 @@ export function TaskCard({
                 {priorityLabels[task.priority][isArabic ? 'ar' : 'en']}
               </Badge>
             </div>
-            {task.progress > 0 && task.progress < 100 && (
+            {(task.progress > 0 && task.progress < 100) || (totalChecklists > 0 && checklistProgress < 100) ? (
               <div className="w-24">
-                <Progress value={task.progress} className="h-1.5" />
+                <Progress value={checklistProgress > 0 ? checklistProgress : task.progress} className="h-1.5" />
               </div>
-            )}
+            ) : null}
           </div>
+
+          {/* Checklist progress indicator */}
+          {totalChecklists > 0 && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                {checklistProgress === 100 ? (
+                  <span className="text-green-500">✓</span>
+                ) : (
+                  <span>{completedChecklists}/{totalChecklists}</span>
+                )}
+              </span>
+              <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all duration-300"
+                  style={{ width: `${checklistProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
@@ -310,6 +360,13 @@ export function TaskCard({
   }
 
   // Default variant
+  // Calculate checklist progress if checklists exist
+  const checklists = (task as any).checklists as TaskChecklist[] | undefined;
+  const tags = (task as any).tags as Tag[] | undefined;
+  const totalChecklists = checklists?.length || 0;
+  const completedChecklists = checklists?.filter(c => c.is_completed).length || 0;
+  const checklistProgress = totalChecklists > 0 ? Math.round((completedChecklists / totalChecklists) * 100) : 0;
+
   return (
     <Card className={cn('transition-all hover:shadow-md', draggable && 'cursor-grab active:cursor-grabbing')}>
       <CardContent className="p-4">
@@ -324,6 +381,26 @@ export function TaskCard({
             {task.description && (
               <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{task.description}</p>
             )}
+            
+            {/* Tags */}
+            {tags && tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mb-3">
+                {tags.map(tag => (
+                  <span
+                    key={tag.id}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full"
+                    style={{
+                      backgroundColor: `${tag.color}20`,
+                      color: tag.color,
+                      border: `1px solid ${tag.color}40`,
+                    }}
+                  >
+                    {tag.name}
+                  </span>
+                ))}
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <Badge variant="outline" className={cn(statusColors[task.status])}>
                 {statusLabels[task.status][isArabic ? 'ar' : 'en']}
@@ -350,6 +427,27 @@ export function TaskCard({
                 </Badge>
               )}
             </div>
+
+            {/* Checklist progress indicator */}
+            {totalChecklists > 0 && (
+              <div className="flex items-center gap-2 text-sm mb-3">
+                <div className="flex items-center gap-1 text-muted-foreground">
+                  {checklistProgress === 100 ? (
+                    <span className="text-green-500">✓</span>
+                  ) : (
+                    <span>{completedChecklists}/{totalChecklists}</span>
+                  )}
+                </div>
+                <div className="w-40 h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all duration-300"
+                    style={{ width: `${checklistProgress}%` }}
+                  />
+                </div>
+                <span className="text-xs font-medium">{checklistProgress}%</span>
+              </div>
+            )}
+
             <div className="flex items-center justify-between text-sm text-muted-foreground">
               <div className="flex items-center gap-3">
                 {task.assignee && (
@@ -372,7 +470,7 @@ export function TaskCard({
                 )}
               </div>
               <div className="flex items-center gap-3">
-                {task.progress > 0 && task.progress < 100 && (
+                {(task.progress > 0 && task.progress < 100 && totalChecklists === 0) && (
                   <div className="w-32">
                     <Progress value={task.progress} className="h-1.5" />
                   </div>

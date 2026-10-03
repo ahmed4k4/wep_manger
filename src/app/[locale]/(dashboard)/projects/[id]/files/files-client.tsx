@@ -47,13 +47,17 @@ interface FileWithUploader {
   uploader?: { full_name: string | null; avatar_url: string | null };
 }
 
+import { ProjectWithRelations, ProjectStats } from '@/types/project';
+
 interface FilesClientProps {
   projectId: string;
+  project: ProjectWithRelations;
+  stats: ProjectStats | null;
   initialProjectFiles: FileWithUploader[];
   initialUserFiles: FileWithUploader[];
 }
 
-export function FilesClient({ projectId, initialProjectFiles, initialUserFiles }: FilesClientProps) {
+export function FilesClient({ projectId, project, stats, initialProjectFiles, initialUserFiles }: FilesClientProps) {
   const locale = useLocale();
   const isArabic = locale === 'ar';
 

@@ -41,8 +41,6 @@ export type TaskWithRelations = Task & {
   assignee: Profile | null;
   creator: Profile;
   reporter: Profile | null;
-  comments: TaskComment[];
-  attachments: (TaskAttachment & { file: ProjectFile })[];
   project?: Pick<Project, 'id' | 'name' | 'key'>;
   comments_count?: number;
   attachments_count?: number;
@@ -136,10 +134,26 @@ export async function getTasks(
     .from('tasks')
     .select(
       `
-      *,
-      assignee:profiles!tasks_assignee_id_fkey(*),
-      creator:profiles!tasks_created_by_fkey(*),
-      reporter:profiles!tasks_reporter_id_fkey(*),
+      id,
+      project_id,
+      title,
+      description,
+      status,
+      priority,
+      progress,
+      assignee_id,
+      created_by,
+      reporter_id,
+      start_date,
+      due_date,
+      completed_at,
+      position,
+      created_at,
+      updated_at,
+      deleted_at,
+      assignee:profiles!tasks_assignee_id_fkey(id, email, full_name, avatar_url, role, status, locale, theme, notification_preferences, created_at, updated_at),
+      creator:profiles!tasks_created_by_fkey(id, email, full_name, avatar_url, role, status, locale, theme, notification_preferences, created_at, updated_at),
+      reporter:profiles!tasks_reporter_id_fkey(id, email, full_name, avatar_url, role, status, locale, theme, notification_preferences, created_at, updated_at),
       project:projects(id, name, key),
       comments:task_comments(count),
       attachments:task_attachments(count)
@@ -205,9 +219,13 @@ export async function getTasks(
     return { data: [], count: 0, error };
   }
 
-  // Transform data to include counts
-  const tasksWithCounts = (data || []).map((task) => ({
+  // Transform data to include counts and fix joined relations
+  // Supabase returns arrays for joined relations, but we need single objects
+  const tasksWithCounts = (data || []).map((task: any) => ({
     ...task,
+    assignee: task.assignee?.[0] || null,
+    creator: task.creator?.[0] || null,
+    reporter: task.reporter?.[0] || null,
     comments_count: task.comments?.[0]?.count || 0,
     attachments_count: task.attachments?.[0]?.count || 0,
   })) as TaskWithRelations[];
@@ -227,13 +245,31 @@ export async function getTaskById(
     .from('tasks')
     .select(
       `
-      *,
-      assignee:profiles!tasks_assignee_id_fkey(*),
-      creator:profiles!tasks_created_by_fkey(*),
-      reporter:profiles!tasks_reporter_id_fkey(*),
+      id,
+      project_id,
+      title,
+      description,
+      status,
+      priority,
+      progress,
+      assignee_id,
+      created_by,
+      reporter_id,
+      start_date,
+      due_date,
+      completed_at,
+      position,
+      created_at,
+      updated_at,
+      deleted_at,
+      assignee:profiles!tasks_assignee_id_fkey(id, email, full_name, avatar_url, role, status, locale, theme, notification_preferences, created_at, updated_at),
+      creator:profiles!tasks_created_by_fkey(id, email, full_name, avatar_url, role, status, locale, theme, notification_preferences, created_at, updated_at),
+      reporter:profiles!tasks_reporter_id_fkey(id, email, full_name, avatar_url, role, status, locale, theme, notification_preferences, created_at, updated_at),
       project:projects(id, name, key),
       comments:task_comments(count),
-      attachments:task_attachments(count)
+      attachments:task_attachments(count),
+      checklists:task_checklists(*),
+      tags:task_tags(tags(*))
     `
     )
     .eq('id', taskId)
@@ -244,13 +280,23 @@ export async function getTaskById(
     return { data: null, error };
   }
 
-  const taskWithCounts = {
-    ...data,
-    comments_count: data.comments?.[0]?.count || 0,
-    attachments_count: data.attachments?.[0]?.count || 0,
-  } as TaskWithRelations;
+  // Transform to fix joined relations
+  if (data) {
+    const transformedData = {
+      ...data,
+      assignee: data.assignee?.[0] || null,
+      creator: data.creator?.[0] || null,
+      reporter: data.reporter?.[0] || null,
+      project: data.project?.[0] || null,
+      comments_count: data.comments?.[0]?.count || 0,
+      attachments_count: data.attachments?.[0]?.count || 0,
+      checklists: data.checklists || [],
+      tags: (data.tags || []).map((t: any) => t.tags).filter(Boolean),
+    };
+    return { data: transformedData as TaskWithRelations, error: null };
+  }
 
-  return { data: taskWithCounts, error: null };
+  return { data: null, error: null };
 }
 
 /**
@@ -309,10 +355,26 @@ export async function getTasksForKanban(
     .from('tasks')
     .select(
       `
-      *,
-      assignee:profiles!tasks_assignee_id_fkey(*),
-      creator:profiles!tasks_created_by_fkey(*),
-      reporter:profiles!tasks_reporter_id_fkey(*)
+      id,
+      project_id,
+      title,
+      description,
+      status,
+      priority,
+      progress,
+      assignee_id,
+      created_by,
+      reporter_id,
+      start_date,
+      due_date,
+      completed_at,
+      position,
+      created_at,
+      updated_at,
+      deleted_at,
+      assignee:profiles!tasks_assignee_id_fkey(id, full_name, avatar_url, email),
+      creator:profiles!tasks_created_by_fkey(id, full_name, avatar_url, email),
+      reporter:profiles!tasks_reporter_id_fkey(id, full_name, avatar_url, email)
     `
     )
     .eq('project_id', projectId)
@@ -323,6 +385,15 @@ export async function getTasksForKanban(
     return { data: {} as Record<TaskStatus, TaskWithRelations[]>, error };
   }
 
+  // Transform data to fix joined relations
+  // Supabase returns arrays for joined relations, but we need single objects
+  const transformedData = (data || []).map((task: any) => ({
+    ...task,
+    assignee: task.assignee?.[0] || null,
+    creator: task.creator?.[0] || null,
+    reporter: task.reporter?.[0] || null,
+  })) as TaskWithRelations[];
+
   // Group by status
   const grouped: Record<TaskStatus, TaskWithRelations[]> = {
     TODO: [],
@@ -332,7 +403,7 @@ export async function getTasksForKanban(
     COMPLETED: [],
   };
 
-  (data as TaskWithRelations[]).forEach((task) => {
+  transformedData.forEach((task) => {
     if (grouped[task.status]) {
       grouped[task.status].push(task);
     }
