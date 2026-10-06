@@ -5,7 +5,7 @@
  * Handles pagination, filtering, and real-time updates for notifications page
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Loader2, Filter, X, ChevronLeft, ChevronRight, Check, Mail, Bell, AlertTriangle, Users, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -37,7 +37,8 @@ import {
   markNotificationAsReadAction, 
   markNotificationsAsReadAction, 
   markAllNotificationsAsReadAction,
-  getNotificationsAction 
+  getNotificationsAction,
+  getUnreadNotificationCountAction,
 } from '@/app/actions/notifications';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 
@@ -143,16 +144,19 @@ export function NotificationsClient({
     }
   }, []);
 
-  // Fetch on mount and when filters change
+  // The server component already fetched page 1 with the default filters, so we
+  // must NOT refetch on mount (that would double every notifications page load).
+  // We only refetch when the user actually changes a filter.
+  const isFirstFilterRun = useRef(true);
   useEffect(() => {
+    if (isFirstFilterRun.current) {
+      isFirstFilterRun.current = false;
+      return;
+    }
+    setPage(1);
     fetchNotifications(1, false);
     fetchUnreadCount();
-  }, [fetchNotifications, fetchUnreadCount]);
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [filterType, filterRead]);
+  }, [filterType, filterRead, fetchNotifications, fetchUnreadCount]);
 
   const handleMarkAsRead = async (notificationId: string) => {
     const result = await markNotificationAsReadAction(notificationId);
@@ -446,11 +450,3 @@ export function NotificationsClient({
   );
 }
 
-// Helper function for server-side unread count
-async function getUnreadNotificationCountAction() {
-  const response = await fetch('/api/notifications?count_only=true', {
-    credentials: 'include',
-  });
-  const data = await response.json();
-  return { count: data.count, error: data.error };
-}

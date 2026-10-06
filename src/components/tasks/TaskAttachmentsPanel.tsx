@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useLocale } from 'next-intl';
 import { Paperclip, Plus, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
@@ -17,8 +18,13 @@ export function TaskAttachmentsPanel({ taskId, projectId, attachments, files, ca
   taskId: string; projectId: string; attachments: AttachmentRow[]; files: { id: string; name: string }[]; canManage: boolean; currentUserId: string; canManageAll: boolean;
 }) {
   const locale = useLocale();
+  const router = useRouter();
   const ar = locale === 'ar';
   const [selected, setSelected] = useState('');
+  // Refresh the server-rendered attachment list in place instead of a full
+  // browser reload (window.location.reload), which discards the SPA state and
+  // re-downloads every chunk on the page.
+  const refresh = () => router.refresh();
   const [busy, setBusy] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const attachedIds = new Set(attachments.map((attachment) => attachment.file_id));
@@ -31,7 +37,7 @@ export function TaskAttachmentsPanel({ taskId, projectId, attachments, files, ca
     setBusy(false);
     if (!result.success) { toast.error(result.error || (ar ? 'تعذر إرفاق الملف' : 'Could not attach file')); return; }
     toast.success(ar ? 'تم إرفاق الملف' : 'File attached');
-    window.location.reload();
+    refresh();
   };
   const remove = async (id: string) => {
     if (busy) return;
@@ -40,7 +46,7 @@ export function TaskAttachmentsPanel({ taskId, projectId, attachments, files, ca
     setBusy(false);
     if (!result.success) { toast.error(result.error || (ar ? 'تعذر إزالة المرفق' : 'Could not remove attachment')); return; }
     toast.success(ar ? 'تمت إزالة المرفق' : 'Attachment removed');
-    window.location.reload();
+    refresh();
   };
 
   const handleUploadSuccess = (file: { id: string; name: string }) => {
@@ -48,7 +54,7 @@ export function TaskAttachmentsPanel({ taskId, projectId, attachments, files, ca
     addTaskAttachmentAction(taskId, file.id).then(result => {
       if (result.success) {
         toast.success(ar ? 'تم رفع وإرفاق الملف' : 'File uploaded and attached');
-        window.location.reload();
+        refresh();
       } else {
         toast.error(result.error || (ar ? 'تعذر إرفاق الملف' : 'Could not attach file'));
       }

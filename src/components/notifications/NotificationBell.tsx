@@ -65,15 +65,37 @@ export function NotificationBell({ initialUnreadCount = 0, initialNotifications 
     }
   }, []);
 
-  // Fetch on mount
+  // The server layout already provides the unread count, so we must NOT fetch
+  // on mount (that fired 2 client requests on every navigation). We only poll
+  // while the tab is visible to keep the badge fresh without constant load.
   useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
+    let interval: ReturnType<typeof setInterval> | undefined;
 
-  // Poll for new notifications every 30 seconds
-  useEffect(() => {
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
+    const start = () => {
+      if (interval) return;
+      interval = setInterval(fetchNotifications, 60000);
+    };
+    const stop = () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = undefined;
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchNotifications();
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    if (document.visibilityState === 'visible') start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [fetchNotifications]);
 
   const handleMarkAsRead = async (notificationId: string) => {

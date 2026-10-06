@@ -3,6 +3,7 @@
  * Server-side queries for projects - used in Server Components and Server Actions
  */
 
+import { cache } from 'react';
 import { createSupabaseServerClient, createSupabaseAdminClient } from '../supabase-server';
 import type {
   Project,
@@ -96,14 +97,19 @@ export async function getUserProjects(
 }
 
 /**
- * Get a single project by ID with full relations
+ * Get a single project by ID with full relations.
+ *
+ * Wrapped in React `cache()` so the project layout, the project page and
+ * `generateMetadata` (all of which need the same project during one request)
+ * collapse into a single database round-trip instead of one per caller.
  */
-export async function getProjectById(
-  projectId: string
-): Promise<{ data: ProjectWithRelations | null; error: PostgrestError | null }> {
-  const supabase = await createSupabaseServerClient();
+export const getProjectById = cache(
+  async (
+    projectId: string
+  ): Promise<{ data: ProjectWithRelations | null; error: PostgrestError | null }> => {
+    const supabase = await createSupabaseServerClient();
 
-  const { data, error } = await supabase
+    const { data, error } = await supabase
     .from('projects')
     .select(
       `
@@ -152,7 +158,8 @@ export async function getProjectById(
   }
 
   return { data: null, error: null };
-}
+  }
+);
 
 /**
  * Get project member count
@@ -172,54 +179,59 @@ export async function getProjectMemberCount(
 
 /**
  * Get project statistics (task counts, member count, etc.)
+ *
+ * Cached per request: the project layout and the project page both request the
+ * same stats, so this now resolves once instead of twice per navigation.
  */
-export async function getProjectStats(
-  projectId: string
-): Promise<{ data: ProjectStats | null; error: PostgrestError | null }> {
-  const supabase = await createSupabaseServerClient();
+export const getProjectStats = cache(
+  async (
+    projectId: string
+  ): Promise<{ data: ProjectStats | null; error: PostgrestError | null }> => {
+    const supabase = await createSupabaseServerClient();
 
-  // Aggregate from tasks under the caller's RLS context. Materialized views
-  // cannot enforce row-level security and could expose cross-project counts.
-  // Run the tasks and member-count queries in parallel to avoid a waterfall.
-  const [{ data: tasks, error }, { count: memberCount }] = await Promise.all([
-    supabase
-      .from('tasks')
-      .select('status, priority, progress, due_date')
-      .eq('project_id', projectId)
-      .is('deleted_at', null),
-    supabase
-      .from('project_members')
-      .select('*', { count: 'exact', head: true })
-      .eq('project_id', projectId),
-  ]);
+    // Aggregate from tasks under the caller's RLS context. Materialized views
+    // cannot enforce row-level security and could expose cross-project counts.
+    // Run the tasks and member-count queries in parallel to avoid a waterfall.
+    const [{ data: tasks, error }, { count: memberCount }] = await Promise.all([
+      supabase
+        .from('tasks')
+        .select('status, priority, progress, due_date')
+        .eq('project_id', projectId)
+        .is('deleted_at', null),
+      supabase
+        .from('project_members')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', projectId),
+    ]);
 
-  if (error) return { data: null, error };
-  const rows = tasks || [];
-  const count = (predicate: (task: (typeof rows)[number]) => boolean) =>
-    rows.filter(predicate).length;
-  const today = new Date().toISOString().slice(0, 10);
+    if (error) return { data: null, error };
+    const rows = tasks || [];
+    const count = (predicate: (task: (typeof rows)[number]) => boolean) =>
+      rows.filter(predicate).length;
+    const today = new Date().toISOString().slice(0, 10);
 
-  return {
-    data: {
-      total_tasks: rows.length,
-      todo_count: count((task) => task.status === 'TODO'),
-      in_progress_count: count((task) => task.status === 'IN_PROGRESS'),
-      review_count: count((task) => task.status === 'REVIEW'),
-      blocked_count: count((task) => task.status === 'BLOCKED'),
-      completed_count: count((task) => task.status === 'COMPLETED'),
-      urgent_count: count((task) => task.priority === 'URGENT'),
-      high_count: count((task) => task.priority === 'HIGH'),
-      avg_progress: rows.length
-        ? rows.reduce((sum, task) => sum + (task.progress || 0), 0) / rows.length
-        : 0,
-      overdue_count: count((task) =>
-        Boolean(task.due_date && task.due_date < today && task.status !== 'COMPLETED')
-      ),
-      member_count: memberCount || 0,
-    },
-    error: null,
-  };
-}
+    return {
+      data: {
+        total_tasks: rows.length,
+        todo_count: count((task) => task.status === 'TODO'),
+        in_progress_count: count((task) => task.status === 'IN_PROGRESS'),
+        review_count: count((task) => task.status === 'REVIEW'),
+        blocked_count: count((task) => task.status === 'BLOCKED'),
+        completed_count: count((task) => task.status === 'COMPLETED'),
+        urgent_count: count((task) => task.priority === 'URGENT'),
+        high_count: count((task) => task.priority === 'HIGH'),
+        avg_progress: rows.length
+          ? rows.reduce((sum, task) => sum + (task.progress || 0), 0) / rows.length
+          : 0,
+        overdue_count: count((task) =>
+          Boolean(task.due_date && task.due_date < today && task.status !== 'COMPLETED')
+        ),
+        member_count: memberCount || 0,
+      },
+      error: null,
+    };
+  }
+);
 
 /**
  * Get stats for many projects at once (member counts + task counts).

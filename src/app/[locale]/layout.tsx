@@ -10,6 +10,7 @@ import { LOCALES, type Locale } from '@/shared/lib/i18n/config';
 import { getDirection } from '@/shared/lib/i18n/formatters';
 import { AppShell } from '@/components/app-shell';
 import { getAuthUser } from '@/lib/db/auth-user';
+import { getUnreadNotificationCount } from '@/lib/db/queries/notifications';
 import { ThemeProvider } from '@/components/theme-provider';
 import '@/app/tailwind.generated.css';
 
@@ -29,6 +30,13 @@ export default async function LocaleLayout({
   const direction = getDirection(locale);
   const user = await getAuthUser();
   const account = user ? { name: user.user_metadata?.full_name || user.email || '', email: user.email || '' } : null;
+
+  // Resolve the initial unread notification count on the server so the
+  // notification bell does not have to issue a client fetch on every page
+  // navigation (it previously ran 2 client requests per navigation).
+  const { count: initialUnreadCount } = user
+    ? await getUnreadNotificationCount(user.id)
+    : { count: 0 };
 
   return (
     <html lang={locale} dir={direction} className={`${direction === 'rtl' ? 'rtl' : ''} no-transitions`} suppressHydrationWarning>
@@ -66,7 +74,7 @@ export default async function LocaleLayout({
             enableSystem
             disableTransitionOnChange
           >
-          <AppShell account={account}>{children}</AppShell>
+          <AppShell account={account} initialUnreadCount={initialUnreadCount}>{children}</AppShell>
           </ThemeProvider>
         </NextIntlClientProvider>
         <script

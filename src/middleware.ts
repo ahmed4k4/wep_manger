@@ -1,6 +1,14 @@
 /**
  * Middleware for i18n and Authentication
  * Combines next-intl locale handling with Supabase auth
+ *
+ * Performance note:
+ * The matcher below intentionally excludes all Next.js internals, build assets,
+ * source maps, static files and the favicon so that neither the next-intl
+ * middleware nor the Supabase session-refresh (which performs a network call to
+ * the Auth server) runs for asset requests. Previously only `.png` and a couple
+ * of `_next` paths were excluded, which meant every image, font, css chunk,
+ * hMR request and arbitrary static file triggered a full auth round-trip.
  */
 
 import createMiddleware from 'next-intl/middleware';
@@ -22,5 +30,11 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\.png$).*)'],
+  // Match all request paths except:
+  //  - api                 (route handlers manage their own auth)
+  //  - _next/static        (build assets)
+  //  - _next/image         (image optimization)
+  //  - _next/data          (client-side navigation payloads)
+  //  - any file with an extension (images, fonts, css, js, maps, favicon, etc.)
+  matcher: ['/((?!api|_next|.*\\..*).*)'],
 };

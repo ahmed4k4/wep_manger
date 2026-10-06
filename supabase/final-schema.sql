@@ -899,7 +899,8 @@ CREATE INDEX IF NOT EXISTS idx_projects_owner ON public.projects(owner_id);
 CREATE INDEX IF NOT EXISTS idx_projects_status ON public.projects(status);
 CREATE INDEX IF NOT EXISTS idx_projects_deleted_at ON public.projects(deleted_at) WHERE deleted_at IS NULL;
 
-CREATE INDEX IF NOT EXISTS idx_project_members_project ON public.project_members(project_id);
+-- NOTE: (project_id, user_id) already has a UNIQUE constraint (uq_project_members_unique)
+-- whose index covers project_id-leading lookups, so a separate idx on project_id is redundant.
 CREATE INDEX IF NOT EXISTS idx_project_members_user ON public.project_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_project_members_role ON public.project_members(role);
 
@@ -941,9 +942,12 @@ CREATE INDEX IF NOT EXISTS idx_user_notes_project ON public.user_notes(project_i
 CREATE INDEX IF NOT EXISTS idx_user_notes_pinned ON public.user_notes(user_id, is_pinned) WHERE is_pinned = TRUE;
 CREATE INDEX IF NOT EXISTS idx_user_notes_deleted_at ON public.user_notes(deleted_at) WHERE deleted_at IS NULL;
 
+-- "recent notifications for a user" (the bell + list) filters only on user_id and
+-- orders by created_at, so a leading (user_id, created_at DESC) index is the most
+-- useful. The unread partial index was redundant with the composite below.
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON public.notifications(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read_created ON public.notifications(user_id, read_at, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_project_user ON public.notifications(project_id, user_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_unread ON public.notifications(user_id) WHERE read_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_notifications_type ON public.notifications(type);
 
 CREATE INDEX IF NOT EXISTS idx_activity_logs_project_created ON public.activity_logs(project_id, created_at DESC);
@@ -952,7 +956,8 @@ CREATE INDEX IF NOT EXISTS idx_activity_logs_entity ON public.activity_logs(enti
 CREATE INDEX IF NOT EXISTS idx_activity_logs_action ON public.activity_logs(action);
 
 CREATE INDEX IF NOT EXISTS idx_tags_project_id ON public.tags(project_id);
-CREATE INDEX IF NOT EXISTS idx_task_tags_task_id ON public.task_tags(task_id);
+-- task_tags PK is (task_id, tag_id); its index already covers task_id-leading
+-- lookups, so a separate idx_task_tags_task_id would be redundant.
 CREATE INDEX IF NOT EXISTS idx_task_tags_tag_id ON public.task_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_task_checklists_task_id ON public.task_checklists(task_id);
 CREATE INDEX IF NOT EXISTS idx_user_searches_user_id_created_at ON public.user_searches(user_id, created_at DESC);

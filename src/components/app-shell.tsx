@@ -13,7 +13,15 @@ import { cn } from "@/lib/utils";
 import { signOutAction } from "@/app/actions/auth";
 import { SearchModal } from "@/components/search/SearchModal";
 
-export function AppShell({ children, account }: { children: React.ReactNode; account: { name: string; email: string } | null }) {
+export function AppShell({
+  children,
+  account,
+  initialUnreadCount = 0,
+}: {
+  children: React.ReactNode;
+  account: { name: string; email: string } | null;
+  initialUnreadCount?: number;
+}) {
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
@@ -106,7 +114,7 @@ export function AppShell({ children, account }: { children: React.ReactNode; acc
           <div className="topbar-actions">
             <a className="locale-button" href={switchLocaleHref} aria-label={isArabic ? "Switch to English" : "التبديل إلى العربية"}><Globe2 size={16} /><span>{isArabic ? "EN" : "عربي"}</span></a>
             <ThemeSwitcher />
-            <NotificationBell />
+            <NotificationBell initialUnreadCount={initialUnreadCount} />
             <div className="topbar-avatar" aria-label={account?.name || (isArabic ? "الحساب" : "Account")}>{account?.name?.[0]?.toUpperCase() || (isArabic ? "م" : "W")}</div>
           </div>
         </header>
